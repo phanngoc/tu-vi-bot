@@ -48,3 +48,46 @@ splitter = SemanticDoubleMergingSplitterNodeParser(
 nodes = splitter.get_nodes_from_documents(documents)
 print(nodes[0].get_content())
 ```
+
+
+## API:
+
+Call BOT:
+
+POST: /api/answer
+
+Params:
+```
+{
+    type: "direct|suggest", // type='direct' thì trả lờit trực tiếp nên choice sẽ = null
+    question: "Câu hỏi của người dùng",
+    params: {
+        choice: 3 (id từ actions phía dưới)
+    }
+}
+```
+
+Response:
+```
+{
+    code: 200,
+    message: "Cau trả lời của bot",
+    actions: [
+        {
+            id: 1,
+            type: "text",
+            content: "Nội dung câi trả lời",
+        },
+        {
+            id: 2,
+            type: "image",
+            content: "url hình ảnh",
+        },
+        {
+            id: 3,
+            type: "video",
+            content: "url video",
+        },
+    ]
+}
+```
