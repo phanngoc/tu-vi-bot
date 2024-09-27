@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 
-const HoroscopePrediction = () => {
+function HoroscopePrediction() {
     const [name, setName] = useState('');
-    const [birthday, setBirthday] = useState('');
+    const [day, setDay] = useState('');
+    const [month, setMonth] = useState('');
+    const [year, setYear] = useState('');
     const [yearToCheck, setYearToCheck] = useState('');
     const [prediction, setPrediction] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const response = await fetch('http://localhost:5000/predict', {
+        const birthday = `${year}-${month}-${day}`;
+        const response = await fetch('/predict', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -35,13 +38,32 @@ const HoroscopePrediction = () => {
                 </div>
                 <div className="mb-4">
                     <label className="block text-gray-700">Ngày sinh:</label>
-                    <input
-                        type="date"
-                        value={birthday}
-                        onChange={(e) => setBirthday(e.target.value)}
-                        className="w-full px-3 py-2 border rounded"
-                        required
-                    />
+                    <div className="flex space-x-2">
+                        <input
+                            type="number"
+                            placeholder="Ngày"
+                            value={day}
+                            onChange={(e) => setDay(e.target.value)}
+                            className="w-1/3 px-3 py-2 border rounded"
+                            required
+                        />
+                        <input
+                            type="number"
+                            placeholder="Tháng"
+                            value={month}
+                            onChange={(e) => setMonth(e.target.value)}
+                            className="w-1/3 px-3 py-2 border rounded"
+                            required
+                        />
+                        <input
+                            type="number"
+                            placeholder="Năm"
+                            value={year}
+                            onChange={(e) => setYear(e.target.value)}
+                            className="w-1/3 px-3 py-2 border rounded"
+                            required
+                        />
+                    </div>
                 </div>
                 <div className="mb-4">
                     <label className="block text-gray-700">Năm cần xem:</label>
@@ -56,10 +78,10 @@ const HoroscopePrediction = () => {
                 <button type="submit" className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
                     Dự đoán
                 </button>
-                {prediction && <p className="mt-4 text-green-500">{prediction}</p>}
+                {prediction && <p className="mt-4 text-center">{prediction}</p>}
             </form>
         </div>
     );
-};
+}
 
 export default HoroscopePrediction;
