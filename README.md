@@ -9,6 +9,16 @@ Website chuyện dự đoán tử vi cho người dùng.
 - OpenAI
 - DB lưu trữ ở file json
 
+# Setup
+
+Setup frontend:
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
 # Dữ liệu
 
 - Spec tham khảo website.
@@ -16,7 +26,7 @@ https://tuvi.vn/
 
 # AI bot.
 
-Dùng OpenAI + Llama để tạo ra câu trả lời tử vi cho người dùng.
+- Dùng OpenAI + Llama để tạo ra câu trả lời tử vi cho người dùng.
 
 https://docs.llamaindex.ai/en/stable/examples/node_parsers/semantic_double_merging_chunking/
 
@@ -49,6 +59,21 @@ nodes = splitter.get_nodes_from_documents(documents)
 print(nodes[0].get_content())
 ```
 
+- Dùng chroma để save và load vector:
+
+Ref:
+https://docs.llamaindex.ai/en/stable/examples/vector_stores/ChromaIndexDemo/
+
+```python
+from llama_index.core import ChromaIndex
+from llama_index.core import SimpleDirectoryReader
+
+documents = SimpleDirectoryReader(input_files=["pg_essay.txt"]).load_data()
+
+index = ChromaIndex()
+index.build_index(documents)
+index.save_index("index")
+```
 
 ## API:
 
