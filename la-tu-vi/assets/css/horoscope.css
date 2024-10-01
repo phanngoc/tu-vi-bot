@@ -1,0 +1,507 @@
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    font-family: 'Tahoma', sans-serif;
+    font-weight: bold;
+}
+
+.fixed-title-color {
+    color: rgb( 51, 51, 51);
+}
+
+.uppercase-text {
+    text-transform: uppercase;
+}
+
+.main-container {
+    /* margin: 20px auto; */
+    height: 920px;
+    width: 675px;
+    border: 1px solid red;
+    display: flex;
+    flex-wrap: wrap;
+    position: relative;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    /* z-index: 1; */
+}
+
+.image-container {
+    width: 675px;
+    margin: 0 auto;
+}
+
+.capture-button-container {
+    width: 675px;
+    margin: 0 auto;
+}
+
+.small-ticket {
+    width: 25%;
+    height: 230px;
+    border: 1px solid black;
+    display: inline-block;
+    background-repeat: no-repeat;
+    background-position: center;
+    padding: 4px 1px;
+    position: relative;
+}
+
+.big-ticket {
+    width: 50%;
+    height: 460px;
+    padding: 7px;
+    position: relative;
+}
+
+.main-container>.absolute-ticket {
+    position: absolute;
+    top: 460px;
+    border: 1px solid black;
+}
+
+.main-container>.absolute-ticket~.absolute-ticket {
+    left: 504.5px;
+}
+
+.ticket-header {
+    display: flex;
+    flex-direction: row;
+    /* justify-content: space-around; */
+    justify-content: space-between;
+    margin: 3px 0 0;
+    padding: 3px;
+}
+
+.header_center {
+    font-size: 11px;
+    margin-bottom: 0px;
+}
+
+.header_right, .header_left {
+    font-size: 10px;
+    margin-bottom: 0px;
+}
+
+.title-text {
+    text-align: center;
+}
+
+.title-text p {
+    font-size: 11px;
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 0px;
+    flex-direction: column;
+}
+
+.ticket-footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    position: absolute;
+    bottom: -8px;
+    width: 99%;
+    font-size: 10px;
+    padding: 0 3px;
+}
+
+.big-ticket th {
+    width: 30%;
+}
+
+.big-ticket td, .big-ticket th {
+    padding: 3px;
+    font-size: 10px;
+    width: 35%;
+}
+
+.mark-image {
+    width: 70px;
+    height: 70px;
+    position: absolute;
+    bottom: 200px;
+    right: 5px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.qr-code {
+    width: 110px;
+    height: 110px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.main-horoscope-qrcode {
+    position: absolute;
+    bottom: 85px;
+    right: 5px;
+}
+
+.advertising-text {
+    /* width: 285px; */
+    font-size: 10.5px;
+    position: absolute;
+    bottom: 5px;
+    color: red;
+}
+
+.advertising-text-link a {
+    color: red;
+}
+
+/* .advertising-text-link a {
+    animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0.3;
+    }
+} */
+
+.advertising-text-link a:hover {
+    text-decoration: none;
+    color: rgba(255, 94, 94, 0.926);
+}
+
+.special-columm {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.second-div-spec {
+    text-align: center;
+    position: relative;
+    left: 30px;
+}
+
+.first-hr, .second-hr, .third-hr {
+    border-left: 2px dashed grey;
+    height: 100%;
+    position: absolute;
+    left: 23%;
+    bottom: -16px;
+}
+
+.second-hr {
+    transform: rotate(20deg);
+    left: 48%;
+    bottom: -44px;
+    height: 107%;
+}
+
+.third-hr {
+    transform: rotate(41deg);
+    bottom: -102px;
+    height: 86%;
+    left: 62%;
+}
+
+/* Styling tuan-triet */
+
+.tuan-triet {
+    position: absolute;
+    margin: 0 auto;
+    /* bottom: 50px;
+    left: 130px; */
+    color: #fff;
+    padding: 2px 12px;
+    font-size: 10px;
+    background-color: black;
+    /* z-index: 1; */
+    text-transform: uppercase;
+}
+
+.tuan-triet-top {
+    top: -11px;
+    left: 55px;
+}
+
+.tuan-triet-bot {
+    bottom: -10px;
+    left: 55px;
+}
+
+.tuan-triet-topleft {
+    top: -12px;
+    left: -30px;
+}
+
+.tuan-triet-topright {
+    top: -12px;
+    right: -24px;
+}
+
+.tuan-triet-botright {
+    bottom: -10px;
+    right: -24px;
+}
+
+.tuan-triet-botleft {
+    bottom: -10px;
+    left: -30px;
+}
+
+.tuan-triet-both {
+    display: none;
+}
+
+.tuan-triet-both-1 {
+    top: -12px;
+    left: -42px;
+}
+
+.tuan-triet-both-2 {
+    top: -12px;
+    right: -48px;
+}
+
+.tuan-triet-both-3, .tuan-triet-both-5 {
+    left: 40px;
+    top: -11PX;
+}
+
+.tuan-triet-both-4, .tuan-triet-both-6 {
+    left: 40px;
+    bottom: -11PX;
+}
+
+.tuan-triet-both-9 {
+    left: 39px;
+    bottom: -10PX;
+}
+
+.tuan-triet-both-10, .tuan-triet-both-12 {
+    top: -11px;
+    left: 40px;
+}
+
+.tuan-triet-both-11 {
+    left: 39px;
+    bottom: -10PX;
+}
+
+.tuan-triet-both-7 {
+    bottom: -10px;
+    right: -41px;
+}
+
+.tuan-triet-both-8 {
+    bottom: -10px;
+    left: -41px;
+}
+
+.normal {
+    font-weight: normal !important;
+}
+
+.bold {
+    font-weight: bold !important;
+}
+
+.uppercase {
+    text-transform: uppercase !important;
+}
+
+.capitalize {
+    text-transform: capitalize !important;
+}
+
+.line {
+    position: absolute;
+    width: 3px;
+    border-left: 1px dashed grey;
+}
+
+.main-details-container {
+    position: absolute;
+    width: 165px;
+    height: 133px;
+    bottom: 35px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.left-container, .right-container {
+    width: 50%;
+}
+
+.main-details-container p {
+    font-size: 10.5px;
+    text-align: left;
+    margin-bottom: -1.2px;
+    margin-left: 0px;
+    /* letter-spacing: -0.95px; */
+}
+
+/* Styling Advisor-relating stuff */
+
+.advisor-section {
+    margin: 20px auto;
+    width: 600px;
+    display: flex;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 10;
+}
+
+.advisor-logo-image {
+    width: 80px;
+    height: 80px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin-right: 15px;
+    /* display: inline-block; */
+}
+
+.alert.alert-success {
+    margin: 50px auto;
+    width: 600px;
+    display: none;
+}
+
+.advisor-group-link {
+    color: white;
+    font-weight: 300;
+}
+
+.advisor-group-link:hover {
+    text-decoration: none !important;
+    color: white;
+}
+
+.advisor-ads-text {
+    margin-left: 15px;
+    /* line-height: 80px; */
+}
+
+.group-text {
+    font-size: 0.6rem;
+}
+
+.big-group-text {
+    font-size: 1rem;
+}
+
+.advisor-section .fa-copy {
+    font-size: 150%;
+    margin-left: 20px;
+}
+
+.capture-button {
+    font-size: 300%;
+}
+
+.capture-button-text {
+    font-size: 200%;
+    color: red;
+}
+
+.capture-button-text {
+    animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0.3;
+    }
+}
+
+#entryForm .fa-copy {
+    font-size: 150%;
+}
+
+.advisor-section .fa-copy:hover, #entryForm .fa-copy:hover, .capture-button:hover {
+    color: #0275d8;
+    cursor: pointer;
+}
+
+.toast-logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+}
+
+.container-demo {
+    border: .5px solid grey;
+}
+
+.modal-dialog {
+    left: initial !important;
+}
+
+.hiddenForm {
+    width: 50%;
+    margin: 20px auto;
+    font-size: 14px;
+    padding: 20px
+}
+
+.redirect-button {
+    position: fixed;
+    box-shadow: 5px 5px 5px rgb(113, 112, 112);
+    bottom: 25px;
+    left: 25px;
+}
+
+.redirect-button button {
+    font-size: 13.5px
+}
+
+@media only screen and (max-width: 992px) {
+    .hiddenForm {
+        width: 60%;
+    }
+    .main-details-container p {
+        font-size: 12px;
+    }
+}
+
+@media only screen and (max-width: 768px) {
+    .advertising-text {
+        font-size: 9px;
+    }
+    .hiddenForm {
+        width: 100%;
+    }
+    .group-text {
+        font-size: 0.6em;
+    }
+    .big-group-text {
+        font-size: .8rem;
+    }
+    .main-details-container p {
+        font-size: 10.7px;
+    }
+    .title-text p {
+        /* font-size: 10px; */
+    }
+    .big-ticket td, .big-ticket th {
+        /* font-size: 11px; */
+    }
+    .main-details-container p {
+        letter-spacing: initial;
+    }
+    .main-details-container {
+        bottom: 30px;
+    }
+    .redirect-button {
+        display: none;
+    }
+}
+
+/*
+@media only screen and (max-width: 750px) {
+    .main-details-container p {
+        font-size: 10.7px;
+    }
+} */
