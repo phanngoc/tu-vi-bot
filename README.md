@@ -11,6 +11,20 @@ Website chuyện dự đoán tử vi cho người dùng.
 
 # Setup
 
+
+Setup API:
+
+make new file .env
+```
+OPENAI_API_KEY=xxx
+```
+
+
+```
+pip install -r requirement.txt
+py app.py
+```
+
 Setup frontend:
 
 ```
@@ -18,6 +32,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+
 
 # Dữ liệu
 
