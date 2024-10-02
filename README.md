@@ -28,8 +28,11 @@ https://tuvi.vn/
 
 - Dùng OpenAI + Llama để tạo ra câu trả lời tử vi cho người dùng.
 
+![image](./images/2-Grafika-wykres-chunking.png)
+
 https://docs.llamaindex.ai/en/stable/examples/node_parsers/semantic_double_merging_chunking/
 
+https://bitpeak.pl/chunking-methods-in-rag-methods-comparison/
 
 ```
 from llama_index.core.node_parser import (
