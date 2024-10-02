@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --thumb-color: #ff0000;
+    --thumb-hover-color: #000000;
+    --track-color: rgba(146, 43, 43, 0.1);
+
+    --app-height: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    :root {
+      --app-height: 100dvh;
+    }
+  }
+
+  html {
+    /* Better Font Rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  @supports (-moz-appearance: none) {
+    body {
+      scrollbar-color: var(--thumb-color) var(--track-color);
+    }
+  }
+
+  ::-webkit-scrollbar {
+    background-color: var(--track-color);
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background-color: var(--thumb-color);
+    border: 2px solid var(--track-color);
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--thumb-hover-color);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background-color: var(--track-color);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+}
