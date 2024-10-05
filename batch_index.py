@@ -21,7 +21,7 @@ Settings.embed_model = embed_model
 nlp = spacy.load('vi_core_news_lg')
 
 # documents = SimpleDirectoryReader(input_dir="./data").load_data()
-documents = SimpleDirectoryReader(input_files=["./data/tuoi-xong-dat.txt"]).load_data()
+documents = SimpleDirectoryReader(input_dir="./data").load_data()
 
 LANGUAGE_MODELS: Dict[str, List[str]] = {
     "english": ["en_core_web_md", "en_core_web_lg"],
@@ -58,13 +58,14 @@ config = VietnameseLanguageConfig(language="vietnamese", spacy_model="vi_core_ne
 splitter = SemanticDoubleMergingSplitterNodeParser(
     language_config=config,
     initial_threshold=0.4,
-    appending_threshold=0.3,
-    merging_threshold=0.7,
+    appending_threshold=0.5,
+    merging_threshold=0.5,
     max_chunk_size=5000,
 )
 
 nodes = splitter.get_nodes_from_documents(documents)
-print(len(nodes))
+print('len', len(nodes))
+
 
 db = chromadb.PersistentClient(path="./chroma_db")
 chroma_collection = db.get_or_create_collection("tu-vi")
@@ -76,4 +77,5 @@ vector_index = VectorStoreIndex(
     storage_context=storage_context,
     embed_model=embed_model,
 )
+
 # query_engine = vector_index.as_query_engine()

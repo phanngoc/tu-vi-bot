@@ -2,16 +2,24 @@ from llama_index.core import VectorStoreIndex
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.agent.openai import OpenAIAgent
+from llama_index.llms.openai import OpenAI
+from llama_index.core.tools import BaseTool, FunctionTool
 
 import os
 from dotenv import load_dotenv
 import chromadb
 from llama_index.core import Settings
 
+MODEL_NAME = "gpt-4o-mini"
+MODEL_EMBEDDING_NAME = "text-embedding-3-small"
+
 load_dotenv()  # take environment variables from .env.
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 
-embed_model = OpenAIEmbedding(model="text-embedding-3-small", dimensions=1536)
+embed_model = OpenAIEmbedding(model=MODEL_EMBEDDING_NAME, dimensions=1536)
+llm = OpenAI(model=MODEL_NAME)
+
 Settings.embed_model = embed_model
 
 # Load from disk
@@ -28,16 +36,34 @@ index = VectorStoreIndex.from_vector_store(
 # Create query engine
 query_engine = index.as_query_engine()
 
-# Query the index
-# response = query_engine.query("các tuổi xông đất tốt ?")
-# print(str(response))
-
-# reply from user
-
 def prompt_to_predict(questionMessage = ''):
     response = query_engine.query(questionMessage)
-    print(str(response))
-    return response
+    print('prompt_to_predict:' + str(response))
+    return str(response)
+
+
+# def multiply(a: int, b: int) -> int:
+#     """Multiple two integers and returns the result integer"""
+#     return a * b
+
+# multiply_tool = FunctionTool.from_defaults(fn=multiply)
+
+# def add(a: int, b: int) -> int:
+#     """Add two integers and returns the result integer"""
+#     return a + b
+
+
+# add_tool = FunctionTool.from_defaults(fn=add)
+
+# # Create the agent
+# agent = OpenAIAgent.from_tools(
+#     [multiply_tool, add_tool], llm=llm, verbose=True
+# )
+
+# response = agent.chat("What is (121 * 3) + 42?")
+# print(str(response))
+
+
 
 # def prompt_to_predict(questionMessage = ''):
 #     system_message = "Hãy nhập ngày sinh của bạn và năm bạn muốn xem."
