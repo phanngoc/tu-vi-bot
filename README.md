@@ -2,6 +2,8 @@
 
 Website chuyện dự đoán tử vi cho người dùng.
 
+![Screenshot](./images/screenshot.png)
+
 # Công nghệ sử dụng
 
 - Python + flask
