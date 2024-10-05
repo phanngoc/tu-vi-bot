@@ -135,3 +135,6 @@ Response:
     ]
 }
 ```
+
+- Url request sinh ra tử vi:
+curl http://127.0.0.1:5000/export-tu-vi?fullname=PHAM+VAN+MINH&sex=1&year=2024&birthday=2/10/2024+0:0
