@@ -6,26 +6,10 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import datetime
 from flask_cors import CORS
+from models import Request, Zodiac, Star, CanChi, MasterData, User, session
 
 cors = CORS()
-
-Base = declarative_base()
-
-class Request(Base):
-    __tablename__ = 'requests'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
-    content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-# Create an engine and a session
-engine = create_engine('sqlite:///tu-vi.db')
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
 
 app = Flask(__name__)
 cors.init_app(app)
@@ -35,8 +19,12 @@ def reply():
     params = request.get_json()
     print('reply:data:', params)
     message = params['message']
-    year_to_check = 2024
-    
+    # uuid = params['uuid']
+
+    # new_request = Request(content=response, uuid=uuid)
+    # session.add(new_request)
+    # session.commit()
+
     response = prompt_to_predict(message)
     return jsonify({'message': response})
 

@@ -3,3 +3,7 @@ __pycache__/*
 /.venv
 .env
 /output
+/tu-vi.db
+/research/storage/
+/storage/
+.vscode/
