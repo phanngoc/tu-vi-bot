@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Human from './human';
 import Bot from './bot';
-
+import { v4 as uuidv4 } from 'uuid';
 
 const HOST_URL = 'http://127.0.0.1:5000';
 
