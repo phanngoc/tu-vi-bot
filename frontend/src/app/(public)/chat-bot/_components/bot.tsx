@@ -34,36 +34,53 @@ function Bot({ content, stage }: BotProps) {
   };
 
   const formatContent = (text: string) => {
-    // Split by newlines and format each paragraph
+    // Split by newlines and filter empty lines
     const lines = text.split('\n').filter(line => line.trim());
     
     return lines.map((line, index) => {
-      // Handle emoji-prefixed lines
-      if (line.match(/^[🌙🔮💬⏳📝👋✨🌟📋🌫️]/)) {
+      const trimmedLine = line.trim();
+      
+      // Handle emoji-prefixed lines with broader emoji detection
+      if (trimmedLine.match(/^[\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u26FF]|[\u2700-\u27BF]/) || 
+          trimmedLine.match(/^[🌙🔮💬⏳📝👋✨🌟📋🌫️📅🌿👨‍👩‍👧‍👦💼⚪🟢🔵🔴🟡📈📉➡️💪💔⚖️]/)) {
         return (
           <p key={index} className="mb-3 text-mystic-silver leading-relaxed font-medium">
-            {line}
+            {trimmedLine}
           </p>
         );
       }
       
-      // Handle bold sections with **text**
-      const boldText = line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-mystic-gold font-bold">$1</strong>');
-      
+      // Regular paragraphs
       return (
-        <p 
-          key={index} 
-          className="mb-2 text-mystic-silver/90 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: boldText }}
-        />
+        <p key={index} className="mb-2 text-mystic-silver/90 leading-relaxed">
+          {formatTextWithMarkdown(trimmedLine)}
+        </p>
       );
     });
   };
 
+  const formatTextWithMarkdown = (text: string) => {
+    // Split text by bold markers while preserving the markers for processing
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    
+    return parts.map((part, index) => {
+      if (part.match(/^\*\*.*\*\*$/)) {
+        // Bold text - remove markers and apply styling
+        const content = part.replace(/\*\*/g, '');
+        return (
+          <strong key={index} className="text-mystic-gold font-bold">
+            {content}
+          </strong>
+        );
+      }
+      return part;
+    });
+  };
+
   return (
-    <div className="flex items-start space-x-3 animate-float-gentle">
+    <div className="flex items-start space-x-3">
       {/* Mystical Avatar */}
-      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg animate-wisdom-pulse border ${getStageStyle()}`}>
+      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg border ${getStageStyle()}`}>
         {getAvatar()}
       </div>
       
@@ -73,13 +90,6 @@ function Bot({ content, stage }: BotProps) {
           // Display structured Tu Vi reading
           <div className="space-y-4">
             <TuviDisplay data={parsedResponse.tuviReading} />
-            {parsedResponse.followUpMessage && (
-              <div className="mt-6 pt-4 border-t border-mystic-gold/20">
-                <div className="prose prose-sm max-w-none">
-                  {formatContent(parsedResponse.followUpMessage)}
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           // Display plain text message
@@ -92,9 +102,9 @@ function Bot({ content, stage }: BotProps) {
         {stage === 'analyzing' && !parsedResponse.isStructured && (
           <div className="mt-3 flex justify-center">
             <div className="flex space-x-2">
-              <div className="w-2 h-2 bg-fortune-divination rounded-full animate-pulse"></div>
-              <div className="w-2 h-2 bg-mystic-gold rounded-full animate-pulse delay-100"></div>
-              <div className="w-2 h-2 bg-fortune-celestial rounded-full animate-pulse delay-200"></div>
+              <div className="w-2 h-2 bg-fortune-divination rounded-full"></div>
+              <div className="w-2 h-2 bg-mystic-gold rounded-full"></div>
+              <div className="w-2 h-2 bg-fortune-celestial rounded-full"></div>
             </div>
           </div>
         )}

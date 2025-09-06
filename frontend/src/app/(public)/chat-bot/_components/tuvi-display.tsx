@@ -22,7 +22,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
         
         <div className="bg-mystic-dark/30 rounded-lg p-3 border border-mystic-gold/20">
           <p className="text-mystic-amber font-medium mb-1">🔮 Căn cơ mệnh chủ:</p>
-          <p className="text-mystic-silver leading-relaxed">{data.basic_destiny}</p>
+          <p className="text-mystic-silver leading-relaxed whitespace-pre-line">{data.basic_destiny}</p>
         </div>
       </div>
 
@@ -61,8 +61,8 @@ function TuviDisplay({ data }: TuviDisplayProps) {
                 </div>
               )}
               
-              <p className="text-mystic-silver/90 text-sm mb-2 leading-relaxed">{cung.summary}</p>
-              <p className="text-mystic-silver/75 text-xs leading-relaxed">{cung.detailed_analysis}</p>
+              <p className="text-mystic-silver/90 text-sm mb-2 leading-relaxed whitespace-pre-line">{cung.summary}</p>
+              <p className="text-mystic-silver/75 text-xs leading-relaxed whitespace-pre-line">{cung.detailed_analysis}</p>
             </div>
           ))}
         </div>
@@ -75,7 +75,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
             <span className="mr-2">👨‍👩‍👧‍👦</span>
             Quan hệ gia đình
           </h4>
-          <p className="text-mystic-silver/90 text-sm leading-relaxed">{data.family_relationships}</p>
+          <p className="text-mystic-silver/90 text-sm leading-relaxed whitespace-pre-line">{data.family_relationships}</p>
         </div>
 
         <div className="bg-gradient-to-br from-fortune-ancient/20 to-mystic-purple/20 backdrop-blur-sm rounded-xl p-4 border border-mystic-gold/30">
@@ -83,7 +83,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
             <span className="mr-2">🌿</span>
             Sức khỏe & Phúc đức
           </h4>
-          <p className="text-mystic-silver/90 text-sm leading-relaxed">{data.health_fortune}</p>
+          <p className="text-mystic-silver/90 text-sm leading-relaxed whitespace-pre-line">{data.health_fortune}</p>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
           <span className="mr-2">💼</span>
           Sự nghiệp & Tài chính
         </h4>
-        <p className="text-mystic-silver/90 text-sm leading-relaxed">{data.career_wealth}</p>
+        <p className="text-mystic-silver/90 text-sm leading-relaxed whitespace-pre-line">{data.career_wealth}</p>
       </div>
 
       {/* Current Period */}
@@ -121,7 +121,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
           
           <div className="bg-mystic-dark/30 rounded-lg p-3 border border-mystic-gold/20">
             <p className="text-xs text-mystic-gold/70 mb-2">Lời khuyên:</p>
-            <p className="text-mystic-silver/90 text-sm leading-relaxed">{data.current_period.advice}</p>
+            <p className="text-mystic-silver/90 text-sm leading-relaxed whitespace-pre-line">{data.current_period.advice}</p>
           </div>
         </div>
       </div>
@@ -132,7 +132,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
           <span className="mr-2">📅</span>
           Dự báo năm hiện tại
         </h4>
-        <p className="text-mystic-silver/90 text-sm leading-relaxed">{data.annual_forecast}</p>
+        <p className="text-mystic-silver/90 text-sm leading-relaxed whitespace-pre-line">{data.annual_forecast}</p>
       </div>
 
       {/* Life Guidance */}
@@ -141,7 +141,7 @@ function TuviDisplay({ data }: TuviDisplayProps) {
           <span className="mr-2">🌟</span>
           Hướng dẫn cuộc sống
         </h4>
-        <p className="text-mystic-silver/90 text-sm leading-relaxed font-medium">{data.life_guidance}</p>
+        <p className="text-mystic-silver/90 text-sm leading-relaxed font-medium whitespace-pre-line">{data.life_guidance}</p>
       </div>
     </div>
   );

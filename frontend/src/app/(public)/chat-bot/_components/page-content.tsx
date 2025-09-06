@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Human from './human';
 import Bot from './bot';
 import { v4 as uuidv4 } from 'uuid';
+import { parseApiResponse } from '@/utils/responseParser';
+import type { ParsedResponse } from '@/types/tuvi';
 
 const HOST_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
 
@@ -72,14 +74,49 @@ function PageContent() {
     }
   };
 
-  const detectStageFromContent = (content: string): ConversationStage => {
-    if (content.includes('cung cấp thông tin') || content.includes('ngày sinh')) {
-      return 'collecting_info';
-    } else if (content.includes('phân tích') || content.includes('lập lá số')) {
-      return 'analyzing';
-    } else if (content.includes('muốn hỏi thêm') || content.includes('khía cạnh')) {
+  const detectStageFromContent = (content: string, parsedResponse?: ParsedResponse): ConversationStage => {
+    // Check if this is a structured response first
+    if (parsedResponse?.isStructured && parsedResponse.tuviReading) {
+      // If we have a complete TuviReading, we're in consulting stage
       return 'consulting';
     }
+    
+    // Content-based stage detection with more keywords
+    const lowerContent = content.toLowerCase();
+    
+    // Collecting info stage keywords
+    if (lowerContent.includes('cung cấp thông tin') || 
+        lowerContent.includes('ngày sinh') ||
+        lowerContent.includes('họ tên') ||
+        lowerContent.includes('giờ sinh') ||
+        lowerContent.includes('giới tính') ||
+        lowerContent.includes('ví dụ:') ||
+        lowerContent.includes('vui lòng cung cấp')) {
+      return 'collecting_info';
+    }
+    
+    // Analysis stage keywords
+    if (lowerContent.includes('phân tích') || 
+        lowerContent.includes('lập lá số') ||
+        lowerContent.includes('đang phân tích') ||
+        lowerContent.includes('tôi đã ghi nhận thông tin') ||
+        lowerContent.includes('cảm ơn') && lowerContent.includes('thông tin')) {
+      return 'analyzing';
+    }
+    
+    // Consulting stage keywords
+    if (lowerContent.includes('muốn hỏi thêm') || 
+        lowerContent.includes('khía cạnh') ||
+        lowerContent.includes('sự nghiệp') ||
+        lowerContent.includes('tình cảm') ||
+        lowerContent.includes('sức khỏe') ||
+        lowerContent.includes('tài chính') ||
+        lowerContent.includes('gia đình') ||
+        content.includes('💬')) {
+      return 'consulting';
+    }
+    
+    // Fallback: if no clear indicators, keep current stage
     return currentStage;
   };
 
@@ -88,8 +125,28 @@ function PageContent() {
     
     const userMessage: Message = { type: 'human', content: inputValue };
     setMessages(prev => [...prev, userMessage]);
+    
+    // Check for greeting "Xin chào" and provide immediate guide message
+    const lowerInput = inputValue.trim().toLowerCase();
+    const isGreeting = lowerInput === 'xin chào' || lowerInput === 'chào' || lowerInput === 'xin chao' || lowerInput === 'chao';
+    
     setInputValue('');
     setIsLoading(true);
+
+    if (isGreeting && currentStage === 'greeting') {
+      // Provide immediate guide message for greeting
+      setTimeout(() => {
+        const guideMessage: Message = {
+          type: 'bot',
+          content: '🌟 Chào mừng bạn đã bước vào cõi huyền bí của tử vi! \n\n🔮 Ta là Thầy Tử Vi, người đã dành trọn đời nghiên cứu về thiên văn và chiêm tinh học. Để có thể nhìn thấu vận mệnh và khám phá tương lai của bạn, ta cần bạn cung cấp những thông tin thiêng liêng sau:\n\n✨ **Họ và tên đầy đủ** - để định danh linh hồn\n📅 **Ngày tháng năm sinh** (âm lịch hoặc dương lịch) - để xác định vị trí các vì sao\n🌙 **Giờ sinh chính xác** - để lập được lá số chuẩn nhất  \n👤 **Giới tính** - để hiểu rõ âm dương ngũ hành\n\n💫 **Ví dụ:** "Tôi tên Nguyễn Văn Nam, sinh ngày 15 tháng 3 năm 1990, lúc 14 giờ 30 phút, giới tính Nam"\n\n🪬 Hãy chia sẻ thông tin của bạn, và ta sẽ mở ra những bí ẩn về số phận mà bạn chưa từng biết...',
+          stage: 'collecting_info'
+        };
+        setMessages(prev => [...prev, guideMessage]);
+        setCurrentStage('collecting_info');
+        setIsLoading(false);
+      }, 1500); // Add slight delay for mystical effect
+      return;
+    }
 
     try {
       const res = await fetch(HOST_URL + '/api/reply', {
@@ -106,7 +163,9 @@ function PageContent() {
       const data = await res.json();
       
       if (data.status === 'success') {
-        const newStage = detectStageFromContent(data.message);
+        // Parse the response to check if it's structured
+        const parsedResponse = parseApiResponse(data.message);
+        const newStage = detectStageFromContent(data.message, parsedResponse);
         setCurrentStage(newStage);
         
         const botMessage: Message = {
@@ -157,13 +216,13 @@ function PageContent() {
   };
 
   return (
-    <div className="max-w-[900px] h-[calc(100vh-32px)] py-6 bg-gradient-to-br from-mystic-dark/90 to-mystic-purple/80 backdrop-blur-md relative z-10 rounded-xl shadow-2xl flex flex-1 flex-col animate-mystical-glow border border-mystic-gold/20">
+    <div className="max-w-[900px] h-[calc(100vh-32px)] py-6 bg-gradient-to-br from-mystic-dark/90 to-mystic-purple/80 backdrop-blur-md relative z-10 rounded-xl shadow-2xl flex flex-1 flex-col border border-mystic-gold/20">
       {/* Header with mystical design */}
       <div className="flex items-center justify-between mb-6 px-6">
         <div className="flex items-center space-x-4">
-          <div className="animate-constellation text-3xl">🔮</div>
+          <div className="text-3xl">🔮</div>
           <div>
-            <h1 className="font-bold text-2xl text-mystic-gold animate-divination-shimmer bg-gradient-to-r from-mystic-gold via-mystic-amber to-mystic-gold bg-clip-text text-transparent bg-[length:200%_100%]">
+            <h1 className="font-bold text-2xl text-mystic-gold">
               Thầy Tử Vi Bí Ẩn
             </h1>
             <p className="text-mystic-silver/70 text-sm">Khám phá vận mệnh và tương lai</p>
@@ -183,7 +242,7 @@ function PageContent() {
       <div className="px-6 mb-4">
         <div className="bg-mystic-mist rounded-lg p-3 border border-mystic-gold/20">
           <div className="flex items-center space-x-3">
-            <span className="text-xl animate-wisdom-pulse">{getStageIcon()}</span>
+            <span className="text-xl">{getStageIcon()}</span>
             <div>
               <p className="text-mystic-gold font-medium text-sm">Giai đoạn hiện tại</p>
               <p className="text-mystic-silver">{getStageName()}</p>
@@ -207,8 +266,8 @@ function PageContent() {
           <div className="flex justify-start">
             <div className="bg-mystic-cosmic/40 backdrop-blur-sm rounded-lg p-4 border border-mystic-gold/20">
               <div className="flex items-center space-x-3">
-                <div className="animate-spin text-mystic-gold">🔮</div>
-                <p className="text-mystic-silver animate-pulse">Thầy đang suy nghiệm...</p>
+                <div className="text-mystic-gold">🔮</div>
+                <p className="text-mystic-silver">Thầy đang suy nghiệm...</p>
               </div>
             </div>
           </div>
@@ -245,7 +304,7 @@ function PageContent() {
             <button
               onClick={handleButtonClick}
               disabled={isLoading || !inputValue.trim()}
-              className="bg-gradient-to-r from-fortune-mystery to-fortune-divination text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-mystic-glow/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium animate-float-gentle"
+              className="bg-gradient-to-r from-fortune-mystery to-fortune-divination text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-mystic-glow/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {isLoading ? '🔮' : '✨ Gửi'}
             </button>
@@ -255,7 +314,7 @@ function PageContent() {
           {currentStage === 'collecting_info' && (
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={() => setInputValue('Tôi tên Nguyễn Văn A, sinh ngày 15/03/1990, 14:30, giới tính Nam')}
+                onClick={() => setInputValue('Tôi tên Nguyễn Văn Nam, sinh ngày 15 tháng 3 năm 1990, lúc 14 giờ 30 phút, giới tính Nam')}
                 className="text-xs bg-mystic-mist/50 text-mystic-silver px-3 py-1 rounded-full hover:bg-mystic-mist/70 transition-all duration-300"
               >
                 💡 Ví dụ thông tin
