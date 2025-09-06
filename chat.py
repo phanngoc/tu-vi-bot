@@ -1,20 +1,14 @@
 from llama_index.core import VectorStoreIndex
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.agent.openai import OpenAIAgent
 from llama_index.llms.openai import OpenAI
 from lunarcalendar import Converter, Solar
 from datetime import datetime
 
 import os
 from dotenv import load_dotenv
-import chromadb
 from llama_index.core import Settings
 
-from llama_index.core.agent import ReActAgent
-from llama_index.agent.openai import OpenAIAssistantAgent
-from llama_index.core.output_parsers import PydanticOutputParser
+from llama_index.core.tools import FunctionTool
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List
@@ -204,6 +198,337 @@ def get_tu_hoa_stars(thien_can):
     }
     return tu_hoa_mapping.get(thien_can, {})
 
+# Session-based step-by-step information collection
+class CollectionStep(Enum):
+    GREETING = "greeting"
+    COLLECT_NAME = "collect_name"
+    COLLECT_BIRTHDAY = "collect_birthday" 
+    COLLECT_BIRTH_TIME = "collect_birth_time"
+    COLLECT_GENDER = "collect_gender"
+    ANALYSIS = "analysis"
+    COMPLETED = "completed"
+
+# Global session storage (in production, use Redis or database)
+user_sessions = {}
+
+def get_or_create_session(user_id="default"):
+    """Get or create user session for step-by-step collection"""
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {
+            'step': CollectionStep.GREETING,
+            'collected_info': {},
+            'conversation_history': []
+        }
+    return user_sessions[user_id]
+
+def reset_session(user_id="default"):
+    """Reset user session"""
+    user_sessions[user_id] = {
+        'step': CollectionStep.GREETING,
+        'collected_info': {},
+        'conversation_history': []
+    }
+
+# ReActAgent Tools for step-by-step information collection
+
+def extract_name_from_message(message: str) -> str:
+    """Extract name from message using simple pattern matching"""
+    import re
+    
+    # Look for common patterns like "tôi tên", "tên tôi là", "tên là"
+    patterns = [
+        r'tôi tên\s+([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
+        r'tên tôi là\s+([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
+        r'tên là\s+([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
+        r'tên:\s*([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
+        r'^([A-Za-zÀ-ỹ]+(?:\s+[A-Za-zÀ-ỹ]+){0,3})(?:\s*,|\s*sinh|\s*ngày)'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, message.strip(), re.IGNORECASE)
+        if match:
+            name = match.group(1).strip()
+            if len(name) >= 2 and not any(char.isdigit() for char in name):  # At least 2 characters and no numbers
+                return f"Tên được xác nhận: {name}"
+    
+    return "Chưa thể xác định tên. Vui lòng cung cấp tên của bạn rõ ràng."
+
+def extract_birth_date_from_message(message: str) -> str:
+    """Extract birth date from message using regex"""
+    import re
+    
+    # Look for DD/MM/YYYY pattern
+    pattern = r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b'
+    match = re.search(pattern, message)
+    
+    if match:
+        day, month, year = match.groups()
+        try:
+            # Validate date
+            datetime.strptime(f"{day}/{month}/{year}", "%d/%m/%Y")
+            return f"Ngày sinh được xác nhận: {day}/{month}/{year}"
+        except:
+            return "Ngày sinh không hợp lệ. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
+    
+    return "Chưa thể xác định ngày sinh. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
+
+def extract_birth_time_from_message(message: str) -> str:
+    """Extract birth time from message using regex"""
+    import re
+    
+    # Look for HH:MM pattern
+    pattern = r'\b(\d{1,2}):(\d{2})\b'
+    match = re.search(pattern, message)
+    
+    if match:
+        hour, minute = match.groups()
+        try:
+            hour_int = int(hour)
+            minute_int = int(minute)
+            if 0 <= hour_int <= 23 and 0 <= minute_int <= 59:
+                return f"Giờ sinh được xác nhận: {hour.zfill(2)}:{minute}"
+            else:
+                return "Giờ sinh không hợp lệ. Vui lòng cung cấp giờ từ 00:00 đến 23:59."
+        except:
+            return "Giờ sinh không hợp lệ. Vui lòng cung cấp theo định dạng HH:MM."
+    
+    return "Chưa thể xác định giờ sinh. Vui lòng cung cấp theo định dạng HH:MM."
+
+def extract_gender_from_message(message: str) -> str:
+    """Extract gender from message"""
+    message_lower = message.lower()
+    
+    if any(word in message_lower for word in ['nam', 'male', 'boy', 'trai']):
+        return "Giới tính được xác nhận: Nam"
+    elif any(word in message_lower for word in ['nữ', 'female', 'girl', 'gái']):
+        return "Giới tính được xác nhận: Nữ"
+    else:
+        return "Chưa thể xác định giới tính. Vui lòng chọn Nam hoặc Nữ."
+
+def provide_guidance_for_missing_info(current_info: str) -> str:
+    """Provide specific guidance based on what information is missing"""
+    missing = []
+    
+    if "chưa thể xác định tên" in current_info.lower():
+        missing.append("tên (ví dụ: Tôi tên Nguyễn Văn A)")
+    if "chưa thể xác định ngày sinh" in current_info.lower():
+        missing.append("ngày sinh (ví dụ: 15/03/1990)")
+    if "chưa thể xác định giờ sinh" in current_info.lower():
+        missing.append("giờ sinh (ví dụ: 14:30)")
+    if "chưa thể xác định giới tính" in current_info.lower():
+        missing.append("giới tính (Nam hoặc Nữ)")
+    
+    if missing:
+        return f"Vui lòng cung cấp thêm: {', '.join(missing)}. Ví dụ đầy đủ: 'Tôi tên Nguyễn Văn A, sinh ngày 15/03/1990, 14:30, giới tính Nam'"
+    else:
+        return "Thông tin đã đầy đủ. Có thể tiến hành phân tích tử vi."
+
+# Step-by-step collection tools for ReActAgent
+
+def process_step_1_name(message: str, user_id: str = "default") -> str:
+    """Step 1: Process and validate name input"""
+    session = get_or_create_session(user_id)
+    
+    name_result = extract_name_from_message(message)
+    
+    if "được xác nhận" in name_result:
+        # Extract name
+        import re
+        name = re.search(r'Tên được xác nhận: (.+)', name_result).group(1)
+        session['collected_info']['name'] = name
+        session['step'] = CollectionStep.COLLECT_BIRTHDAY
+        
+        return f"""✅ **Tên đã được ghi nhận: {name}**
+
+📅 **Bước 2/4: Ngày và giờ sinh**
+Bây giờ tôi cần biết ngày và giờ sinh của bạn để tính toán chính xác.
+
+Vui lòng cho biết:
+- **Ngày sinh** (định dạng DD/MM/YYYY)
+- **Giờ sinh** (định dạng HH:MM - rất quan trọng cho việc xác định cung Mệnh)
+
+*Ví dụ: "Tôi sinh ngày 15/03/1990, 14:30" hoặc "15/03/1990, 2:30 chiều"*"""
+    else:
+        return f"""🔮 **Chào mừng bạn đến với dịch vụ tư vấn tử vi!**
+
+📝 **Bước 1/4: Tên của bạn**
+{name_result}
+
+*Ví dụ: "Tôi tên Nguyễn Văn A" hoặc "Tên tôi là Phan Ngọc"*"""
+
+def process_step_2_birthday_time(message: str, user_id: str = "default") -> str:
+    """Step 2: Process birthday and birth time"""
+    session = get_or_create_session(user_id)
+    
+    date_result = extract_birth_date_from_message(message)
+    time_result = extract_birth_time_from_message(message)
+    
+    name = session['collected_info'].get('name', 'bạn')
+    
+    date_confirmed = "được xác nhận" in date_result
+    time_confirmed = "được xác nhận" in time_result
+    
+    if date_confirmed and time_confirmed:
+        # Both confirmed
+        import re
+        birthday = re.search(r'Ngày sinh được xác nhận: (.+)', date_result).group(1)
+        birth_time = re.search(r'Giờ sinh được xác nhận: (.+)', time_result).group(1)
+        
+        session['collected_info']['birthday'] = birthday
+        session['collected_info']['birth_time'] = birth_time
+        session['step'] = CollectionStep.COLLECT_GENDER
+        
+        return f"""✅ **Thông tin thời gian đã được ghi nhận:**
+- 📅 Ngày sinh: {birthday}  
+- 🕐 Giờ sinh: {birth_time}
+
+⚥ **Bước 3/4: Giới tính**
+Cuối cùng, tôi cần biết giới tính của {name} để tính toán vòng Tràng Sinh chính xác.
+
+Vui lòng cho biết giới tính: **Nam** hoặc **Nữ**
+
+*Ví dụ: "Nam", "Nữ", "Giới tính Nam", "Tôi là nữ"*"""
+    
+    elif date_confirmed:
+        # Only date confirmed
+        import re
+        birthday = re.search(r'Ngày sinh được xác nhận: (.+)', date_result).group(1)
+        session['collected_info']['birthday'] = birthday
+        
+        # Check if we already have birth_time from previous input
+        if 'birth_time' in session['collected_info']:
+            # We have both now, move to gender step
+            birth_time = session['collected_info']['birth_time']
+            session['step'] = CollectionStep.COLLECT_GENDER
+            
+            return f"""✅ **Thông tin thời gian đã được ghi nhận:**
+- 📅 Ngày sinh: {birthday}  
+- 🕐 Giờ sinh: {birth_time}
+
+⚥ **Bước 3/4: Giới tính**
+Cuối cùng, tôi cần biết giới tính của {name} để tính toán vòng Tràng Sinh chính xác.
+
+Vui lòng cho biết giới tính: **Nam** hoặc **Nữ**
+
+*Ví dụ: "Nam", "Nữ", "Giới tính Nam", "Tôi là nữ"*"""
+        else:
+            return f"""✅ **Ngày sinh đã được ghi nhận: {birthday}**
+
+🕐 **Vẫn cần giờ sinh**
+{time_result}
+
+Giờ sinh rất quan trọng để xác định cung Mệnh chính xác. Vui lòng cung cấp thêm giờ sinh.
+
+*Ví dụ: "14:30", "2:30 chiều", "8 giờ sáng"*"""
+    
+    elif time_confirmed:
+        # Only time confirmed  
+        import re
+        birth_time = re.search(r'Giờ sinh được xác nhận: (.+)', time_result).group(1)
+        session['collected_info']['birth_time'] = birth_time
+        
+        # Check if we already have birthday from previous input
+        if 'birthday' in session['collected_info']:
+            # We have both now, move to gender step
+            birthday = session['collected_info']['birthday'] 
+            session['step'] = CollectionStep.COLLECT_GENDER
+            
+            return f"""✅ **Thông tin thời gian đã được ghi nhận:**
+- 📅 Ngày sinh: {birthday}  
+- 🕐 Giờ sinh: {birth_time}
+
+⚥ **Bước 3/4: Giới tính**
+Cuối cùng, tôi cần biết giới tính của {name} để tính toán vòng Tràng Sinh chính xác.
+
+Vui lòng cho biết giới tính: **Nam** hoặc **Nữ**
+
+*Ví dụ: "Nam", "Nữ", "Giới tính Nam", "Tôi là nữ"*"""
+        else:
+            return f"""✅ **Giờ sinh đã được ghi nhận: {birth_time}**
+
+📅 **Vẫn cần ngày sinh**
+{date_result}
+
+*Ví dụ: "15/03/1990", "ngày 5 tháng 10 năm 1992"*"""
+    
+    else:
+        # Neither confirmed
+        return f"""📅 **Bước 2/4: Ngày và giờ sinh**
+Chào {name}! Tôi cần thêm thông tin về thời gian sinh:
+
+**Trạng thái hiện tại:**
+- {date_result}
+- {time_result}
+
+Vui lòng cung cấp cả ngày sinh và giờ sinh:
+*Ví dụ: "15/03/1990, 14:30" hoặc "Tôi sinh ngày 5/10/1992, 2:30 chiều"*"""
+
+def process_step_3_gender(message: str, user_id: str = "default") -> str:
+    """Step 3: Process gender"""
+    session = get_or_create_session(user_id)
+    
+    gender_result = extract_gender_from_message(message)
+    name = session['collected_info'].get('name', 'bạn')
+    
+    if "được xác nhận" in gender_result:
+        import re
+        gender = re.search(r'Giới tính được xác nhận: (.+)', gender_result).group(1)
+        session['collected_info']['gender'] = gender
+        session['step'] = CollectionStep.ANALYSIS
+        
+        return f"""✅ **Giới tính đã được ghi nhận: {gender}**
+
+🎉 **Thông tin đã đầy đủ! Bắt đầu phân tích...**
+
+**Tóm tắt thông tin của {name}:**
+- 📝 Tên: {session['collected_info']['name']}
+- 📅 Ngày sinh: {session['collected_info']['birthday']}
+- 🕐 Giờ sinh: {session['collected_info']['birth_time']}
+- ⚥ Giới tính: {gender}
+
+⏳ *Đang tính toán lá số tử vi...*"""
+    else:
+        return f"""⚥ **Bước 3/4: Giới tính**
+Chào {name}! {gender_result}
+
+*Ví dụ: "Nam", "Nữ", "Giới tính nam", "Tôi là nữ"*"""
+
+def generate_final_tuvi_analysis(user_id: str = "default") -> str:
+    """Generate final tuvi analysis with collected information"""
+    session = get_or_create_session(user_id)
+    info = session['collected_info']
+    
+    if all(key in info for key in ['name', 'birthday', 'birth_time', 'gender']):
+        try:
+            chart_data = fn_an_sao_comprehensive(info['birthday'], info['birth_time'], info['gender'])
+            
+            analysis = f"""🔮 **Phân tích tử vi cho {info['name']}**
+
+✨ **Thông tin cơ bản:**
+- 📅 Sinh: {info['birthday']} lúc {info['birth_time']}
+- ⚥ Giới tính: {info['gender']}
+- 🌟 Thiên Can: {chart_data['basic_info']['thien_can']}
+- 🐉 Địa Chi: {chart_data['basic_info']['dia_chi']}
+- ⭐ Cục: {chart_data['basic_info']['cuc']}
+- 🏠 Cung Mệnh: {chart_data['basic_info']['menh_cung']}
+
+🌌 **Các sao trong 12 cung:**
+"""
+            for cung, sao_list in chart_data['sao_cung'].items():
+                sao_str = ', '.join(sao_list) if sao_list else 'Trống'
+                analysis += f"• **{cung}**: {sao_str}\n"
+            
+            analysis += f"\n💫 **Phân tích hoàn tất!** Lá số của {info['name']} đã được tính toán theo phương pháp tử vi truyền thống.\n\n✨ Bạn có thể hỏi tôi thêm về các khía cạnh cụ thể như: vận mệnh, tình duyên, sự nghiệp, tài lộc, sức khỏe...\n\n💬 *Để bắt đầu phiên tư vấn mới, bạn có thể nói 'Xin chào' hoặc 'Tôi muốn xem tử vi'*"
+            
+            # Mark as completed
+            session['step'] = CollectionStep.COMPLETED
+            
+            return analysis
+        except Exception as e:
+            return f"❌ Có lỗi xảy ra khi tính lá số: {str(e)}"
+    else:
+        return "⚠️ Thiếu thông tin cần thiết để tính lá số tử vi."
+
 
 def fn_an_sao_comprehensive(birthday: str, birth_time: str, gender: str):
     """Tính lá số tử vi toàn diện với thông tin chi tiết"""
@@ -334,122 +659,141 @@ query_engine = tu_vi_index.as_query_engine(
     output_cls=ComprehensiveTuviReading, response_mode="tree_summarize", llm=llm_4
 )
 
-def create_consultation_session():
-    """Tạo session tư vấn tử vi mới"""
-    return {
-        'stage': ConversationStage.GREETING,
-        'user_info': None,
-        'chart_data': None,
-        'consultation_history': []
-    }
+# Create FunctionTool instances for ReActAgent
+name_extraction_tool = FunctionTool.from_defaults(
+    fn=extract_name_from_message,
+    name="extract_name",
+    description="Extract user name from a message"
+)
+date_extraction_tool = FunctionTool.from_defaults(
+    fn=extract_birth_date_from_message,
+    name="extract_birth_date", 
+    description="Extract birth date from a message"
+)
+time_extraction_tool = FunctionTool.from_defaults(
+    fn=extract_birth_time_from_message,
+    name="extract_birth_time",
+    description="Extract birth time from a message"
+)
+gender_extraction_tool = FunctionTool.from_defaults(
+    fn=extract_gender_from_message,
+    name="extract_gender",
+    description="Extract gender from a message"
+)
+guidance_tool = FunctionTool.from_defaults(
+    fn=provide_guidance_for_missing_info,
+    name="provide_guidance",
+    description="Provide guidance for missing information"
+)
+# Legacy analysis tool removed - now using step-by-step approach
 
-def process_user_message(message: str, session: dict):
-    """Xử lý tin nhắn người dùng theo từng giai đoạn"""
+# Create FunctionTool instances for step-by-step ReActAgent
+step_1_tool = FunctionTool.from_defaults(
+    fn=process_step_1_name,
+    name="process_step_1_name",
+    description="Process Step 1: Collect and validate user name"
+)
+
+step_2_tool = FunctionTool.from_defaults(
+    fn=process_step_2_birthday_time,
+    name="process_step_2_birthday_time",
+    description="Process Step 2: Collect birthday and birth time"
+)
+
+step_3_tool = FunctionTool.from_defaults(
+    fn=process_step_3_gender,
+    name="process_step_3_gender", 
+    description="Process Step 3: Collect gender information"
+)
+
+final_analysis_tool = FunctionTool.from_defaults(
+    fn=generate_final_tuvi_analysis,
+    name="generate_final_tuvi_analysis",
+    description="Generate final tuvi analysis with all collected information"
+)
+
+reset_session_tool = FunctionTool.from_defaults(
+    fn=lambda user_id="default": reset_session(user_id) or "✨ Phiên tư vấn mới đã được khởi tạo!",
+    name="reset_session",
+    description="Reset session to start a new consultation"
+)
+
+# Step-by-step tools for ReActAgent reasoning
+step_tools_dict = {
+    'step_1': process_step_1_name,
+    'step_2': process_step_2_birthday_time,
+    'step_3': process_step_3_gender,
+    'final_analysis': generate_final_tuvi_analysis,
+    'reset_session': reset_session
+}
+
+# Legacy conversation handling functions removed - now using ReActAgent
+
+def prompt_to_predict(questionMessage='', user_id='default'):
+    """Entry point for step-by-step progressive tử vi consultation"""
     
-    if session['stage'] == ConversationStage.GREETING:
-        return handle_greeting(message, session)
-    elif session['stage'] == ConversationStage.COLLECTING_INFO:
-        return handle_info_collection(message, session) 
-    elif session['stage'] == ConversationStage.ANALYZING:
-        return handle_analysis(session)
-    elif session['stage'] == ConversationStage.CONSULTING:
-        return handle_consultation(message, session)
-
-def handle_greeting(message: str, session: dict):
-    """Xử lý lời chào và hướng dẫn thu thập thông tin"""
-    session['stage'] = ConversationStage.COLLECTING_INFO
-    return """Chào mừng bạn đến với dịch vụ tư vấn tử vi!
-
-Để có thể lập lá số chính xác và tư vấn vận mệnh, tôi cần bạn cung cấp:
-1. **Họ tên** của bạn
-2. **Ngày sinh** (DD/MM/YYYY) 
-3. **Giờ sinh** chính xác (HH:MM) - rất quan trọng cho việc xác định cung Mệnh
-4. **Giới tính** (Nam/Nữ) - ảnh hưởng đến cách an sao và luận vận
-
-Ví dụ: "Tôi tên Nguyễn Văn A, sinh ngày 15/03/1990, 14:30, giới tính Nam"
-
-Bạn có thể cung cấp thông tin này không?"""
-
-def handle_info_collection(message: str, session: dict):
-    """Thu thập và xác thực thông tin sinh học"""
-    try:
-        user_info = programInfoUser(query=message)
+    # Get current session
+    session = get_or_create_session(user_id)
+    current_step = session['step']
+    
+    # Check for reset/restart commands
+    reset_keywords = ['xin chào', 'hello', 'hi', 'chào', 'bắt đầu', 'start', 'reset', 'tư vấn mới', 'xem tử vi']
+    if any(keyword in questionMessage.lower() for keyword in reset_keywords) and current_step == CollectionStep.COMPLETED:
+        reset_session(user_id)
+        session = get_or_create_session(user_id)
+        current_step = session['step']
+    
+    # Progressive step-by-step collection with ReActAgent-style reasoning
+    if current_step == CollectionStep.GREETING:
+        # Step 1: Collect name
+        return process_step_1_name(questionMessage, user_id)
         
-        if not all([user_info.name, user_info.birthday, user_info.birth_time, user_info.gender]):
-            missing_fields = []
-            if not user_info.name: missing_fields.append("họ tên")
-            if not user_info.birthday: missing_fields.append("ngày sinh")
-            if not user_info.birth_time: missing_fields.append("giờ sinh")
-            if not user_info.gender: missing_fields.append("giới tính")
-            
-            return f"Tôi cần thêm thông tin: {', '.join(missing_fields)}. Vui lòng cung cấp đầy đủ để có thể lập lá số chính xác."
+    elif current_step == CollectionStep.COLLECT_NAME:
+        # Still collecting name
+        return process_step_1_name(questionMessage, user_id)
         
-        session['user_info'] = user_info
-        session['stage'] = ConversationStage.ANALYZING
+    elif current_step == CollectionStep.COLLECT_BIRTHDAY:
+        # Step 2: Collect birthday and time
+        return process_step_2_birthday_time(questionMessage, user_id)
         
-        return f"""Cảm ơn {user_info.name}! Tôi đã ghi nhận thông tin:
-- Ngày sinh: {user_info.birthday}  
-- Giờ sinh: {user_info.birth_time}
-- Giới tính: {user_info.gender}
-
-Đang tiến hành lập lá số và phân tích vận mệnh... ⏳"""
+    elif current_step == CollectionStep.COLLECT_BIRTH_TIME:
+        # Still collecting birthday/time (fallback)
+        return process_step_2_birthday_time(questionMessage, user_id)
         
-    except Exception as e:
-        return "Xin lỗi, tôi chưa hiểu đầy đủ thông tin. Vui lòng cung cấp theo định dạng: Tên, ngày sinh (DD/MM/YYYY), giờ sinh (HH:MM), giới tính (Nam/Nữ)"
+    elif current_step == CollectionStep.COLLECT_GENDER:
+        # Step 3: Collect gender
+        return process_step_3_gender(questionMessage, user_id)
+        
+    elif current_step == CollectionStep.ANALYSIS:
+        # Generate final analysis
+        analysis_result = generate_final_tuvi_analysis(user_id)
+        return analysis_result
+        
+    elif current_step == CollectionStep.COMPLETED:
+        # Handle follow-up questions after analysis is complete
+        # This could include detailed questions about specific aspects
+        return f"""💫 **Phiên tư vấn đã hoàn tất!**
 
-def handle_analysis(session: dict):
-    """Thực hiện phân tích lá số tử vi"""
-    user_info = session['user_info']
-    
-    chart_data = fn_an_sao_comprehensive(
-        user_info.birthday, 
-        user_info.birth_time, 
-        user_info.gender
-    )
-    
-    session['chart_data'] = chart_data
-    session['stage'] = ConversationStage.CONSULTING
-    
-    query_text = f"""
-    Phân tích tử vi cho {user_info.name}:
-    - Sinh: {user_info.birthday} lúc {user_info.birth_time}
-    - Giới tính: {user_info.gender}
-    - Thiên Can: {chart_data['basic_info']['thien_can']}
-    - Địa Chi: {chart_data['basic_info']['dia_chi']}
-    - Cục: {chart_data['basic_info']['cuc']}
-    - Cung Mệnh: {chart_data['basic_info']['menh_cung']}
-    
-    Các sao trong 12 cung:
-    """ + "\n".join([f"Cung {cung}: {', '.join(sao_list) if sao_list else 'Trống'}" 
-                    for cung, sao_list in chart_data['sao_cung'].items()])
-    
-    response = query_engine.query(query_text)
-    session['consultation_history'].append(('analysis', str(response)))
-    
-    return str(response) + "\n\n💬 **Bạn có muốn hỏi thêm về khía cạnh nào khác không?** (sự nghiệp, tình cảm, sức khỏe, tài chính, gia đình...)"
+Lá số tử vi của {session['collected_info'].get('name', 'bạn')} đã được phân tích xong.
 
-def handle_consultation(message: str, session: dict):
-    """Xử lý các câu hỏi tư vấn chi tiết"""
-    chart_data = session['chart_data']
-    user_info = session['user_info']
-    
-    context_info = f"""
-    Lá số của {user_info.name}:
-    Cục {chart_data['basic_info']['cuc']}, Cung Mệnh tại {chart_data['basic_info']['menh_cung']}
-    Các sao: {chart_data['sao_cung']}
-    
-    Câu hỏi: {message}
-    """
-    
-    response = query_engine.query(context_info)
-    session['consultation_history'].append(('question', message))
-    session['consultation_history'].append(('answer', str(response)))
-    
-    return str(response)
+✨ **Bạn có thể hỏi tôi về:**
+- Vận mệnh và tính cách tổng quan
+- Tình duyên và hôn nhân  
+- Sự nghiệp và công danh
+- Tài lộc và đầu tư
+- Sức khỏe và tuổi thọ
+- Mối quan hệ gia đình
 
-def prompt_to_predict(questionMessage=''):
-    """Entry point chính cho chatbot tử vi"""
-    if not hasattr(prompt_to_predict, 'session'):
-        prompt_to_predict.session = create_consultation_session()
+💬 **Hoặc bắt đầu phiên tư vấn mới:** Nói "Xin chào" hoặc "Tôi muốn xem tử vi"
+
+*Ví dụ câu hỏi: "Vận mệnh của tôi như thế nào?", "Tình duyên ra sao?", "Năm nay tài lộc thế nào?"*"""
     
-    return process_user_message(questionMessage, prompt_to_predict.session)
+    else:
+        # Default fallback
+        reset_session(user_id)
+        return """🔮 **Chào mừng bạn đến với dịch vụ tư vấn tử vi!**
+
+📝 **Bước 1/4: Tên của bạn**
+Để bắt đầu, vui lòng cho tôi biết tên của bạn.
+
+*Ví dụ: "Tôi tên Nguyễn Văn A" hoặc "Tên tôi là Phan Ngọc"*"""
