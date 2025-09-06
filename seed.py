@@ -1,17 +1,13 @@
-from sqlalchemy import Enum, create_engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base, Zodiac, Star, CanChi, MasterData
+from models import Base, Zodiac, Star, CanChi, MasterData, CanChiType
 
-# Replace with your actual database URL
-DATABASE_URL = "sqlite:///./tuvi.db"
+# Use same database path as models.py
+DATABASE_URL = "sqlite:///tuvi.db"
 
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
-
-class CanChiType(Enum.Enum):
-    ThienCan = "Thiên Can"
-    DiaChi = "Địa Chi"
 
 # Seed data for Zodiac
 zodiacs = [

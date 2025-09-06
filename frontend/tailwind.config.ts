@@ -12,6 +12,26 @@ const config: Config = {
           200: '#0f2731',
         },
         'tarot-color': 'rgb(27, 15, 44)',
+        mystic: {
+          dark: '#1a0b2e',
+          purple: '#2d1b4e',
+          gold: '#d4af37',
+          amber: '#f39c12',
+          sage: '#9caf88',
+          silver: '#c0c0c0',
+          cosmic: '#4a4472',
+          deep: '#16213e',
+          mist: 'rgba(212, 175, 55, 0.1)',
+          glow: 'rgba(243, 156, 18, 0.3)',
+        },
+        fortune: {
+          wisdom: '#8b4513',
+          mystery: '#483d8b',
+          divination: '#9370db',
+          celestial: '#4169e1',
+          spiritual: '#6a5acd',
+          ancient: '#2f4f4f',
+        }
       },
       backgroundImage: {
         tarot: "url('../../public/Images/bg-ewd-pattern.png')",
@@ -22,6 +42,12 @@ const config: Config = {
     },
     animation: {
       'infinity-bg': 'infinity-bg 60s linear infinite',
+      'mystical-glow': 'mystical-glow 3s ease-in-out infinite',
+      'wisdom-pulse': 'wisdom-pulse 4s ease-in-out infinite',
+      'constellation': 'constellation 8s linear infinite',
+      'divination-shimmer': 'divination-shimmer 2s ease-in-out infinite',
+      'ancient-breathe': 'ancient-breathe 6s ease-in-out infinite',
+      'float-gentle': 'float-gentle 3s ease-in-out infinite',
     },
     keyframes: {
       'infinity-bg': {
@@ -42,6 +68,44 @@ const config: Config = {
         '90%': { opacity: '0.6' },
         '100%': { opacity: '0.5' },
       },
+      'mystical-glow': {
+        '0%, 100%': { 
+          boxShadow: '0 0 20px rgba(212, 175, 55, 0.4), 0 0 40px rgba(212, 175, 55, 0.2)', 
+          transform: 'scale(1)' 
+        },
+        '50%': { 
+          boxShadow: '0 0 30px rgba(212, 175, 55, 0.6), 0 0 60px rgba(212, 175, 55, 0.3)', 
+          transform: 'scale(1.02)' 
+        },
+      },
+      'wisdom-pulse': {
+        '0%, 100%': { opacity: '0.8' },
+        '50%': { opacity: '1' },
+      },
+      'constellation': {
+        '0%': { transform: 'rotate(0deg) translateY(0px)' },
+        '33%': { transform: 'rotate(120deg) translateY(-5px)' },
+        '66%': { transform: 'rotate(240deg) translateY(5px)' },
+        '100%': { transform: 'rotate(360deg) translateY(0px)' },
+      },
+      'divination-shimmer': {
+        '0%, 100%': { 
+          backgroundPosition: '200% center',
+          opacity: '0.7'
+        },
+        '50%': { 
+          backgroundPosition: '-200% center',
+          opacity: '1'
+        },
+      },
+      'ancient-breathe': {
+        '0%, 100%': { transform: 'scale(1) rotate(0deg)' },
+        '50%': { transform: 'scale(1.05) rotate(2deg)' },
+      },
+      'float-gentle': {
+        '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+        '50%': { transform: 'translateY(-10px) rotate(1deg)' },
+      },
     },
   },
   plugins: [
@@ -60,6 +124,15 @@ const config: Config = {
           ['@supports (height: 100dvh)']: {
             minHeight: '100dvh',
           },
+        },
+        '.scrollbar-thin': {
+          'scrollbar-width': 'thin',
+        },
+        '.scrollbar-thumb-mystic-gold\\/30': {
+          'scrollbar-color': 'rgba(212, 175, 55, 0.3) transparent',
+        },
+        '.scrollbar-track-transparent': {
+          'scrollbar-color': 'rgba(212, 175, 55, 0.3) transparent',
         },
       });
     }),

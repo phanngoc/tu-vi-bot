@@ -13,18 +13,25 @@ from llama_index.core import SimpleDirectoryReader
 import os
 import spacy
 from typing import Dict, List
-os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Set OpenAI API key
+if not os.getenv('OPENAI_API_KEY'):
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
 embed_model = OpenAIEmbedding(model="text-embedding-3-small", dimensions=1536)
 Settings.embed_model = embed_model
 
-# # Load the Vietnamese spaCy model
-nlp = spacy.load('vi_core_news_lg')
+# # Load the spaCy model (using English as Vietnamese is not available)
+nlp = spacy.load('en_core_web_sm')
 
 # documents = SimpleDirectoryReader(input_dir="./data").load_data()
-documents = SimpleDirectoryReader(input_dir="./data").load_data()
+documents = SimpleDirectoryReader(input_dir="./data_learning").load_data()
 
 LANGUAGE_MODELS: Dict[str, List[str]] = {
-    "english": ["en_core_web_md", "en_core_web_lg"],
+    "english": ["en_core_web_sm", "en_core_web_md", "en_core_web_lg"],
     "german": ["de_core_news_md", "de_core_news_lg"],
     "spanish": ["es_core_news_md", "es_core_news_lg"],
     "vietnamese": ["vi_core_news_lg"],  # Add Vietnamese language models
@@ -53,7 +60,7 @@ class VietnameseLanguageConfig(LanguageConfig):
                 f"{self.spacy_model} is not a valid model for {self.language}. Available models: {LANGUAGE_MODELS[self.language]}"
             )
 
-config = VietnameseLanguageConfig(language="vietnamese", spacy_model="vi_core_news_lg")
+config = VietnameseLanguageConfig(language="english", spacy_model="en_core_web_sm")
 
 splitter = SemanticDoubleMergingSplitterNodeParser(
     language_config=config,
