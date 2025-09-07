@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Human from './human';
 import Bot from './bot';
-import { v4 as uuidv4 } from 'uuid';
 import { parseApiResponse } from '@/utils/responseParser';
 import type { ParsedResponse } from '@/types/tuvi';
+import { getUserId, hasExistingSession, clearUserId } from '@/utils/userSession';
 
 const HOST_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
 
@@ -23,24 +23,72 @@ function PageContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentStage, setCurrentStage] = useState<ConversationStage>('greeting');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => uuidv4());
+  const [userId] = useState(() => getUserId());
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Initialize conversation on component mount
+  // Load chat history or initialize conversation on component mount
   useEffect(() => {
-    setMessages([
-      { 
-        type: 'bot', 
-        content: '🌙 Chào mừng bạn đến với thế giới bí ẩn của tử vi... \n\nTa là một thầy bói lão luyện, đã dành cả đời nghiên cứu thiên văn và chiêm tinh học. Hãy để ta khám phá vận mệnh và tương lai của bạn.\n\n🔮 Để bắt đầu cuộc hành trình tìm hiểu số phận, hãy nói "Xin chào" hoặc bất kỳ lời gì bạn muốn...',
-        stage: 'greeting'
+    const initializeChat = async () => {
+      setIsInitialLoading(true);
+      
+      // Check if user has existing session and try to load history
+      if (hasExistingSession()) {
+        try {
+          const res = await fetch(`${HOST_URL}/api/chat-history?user_id=${userId}`);
+          const data = await res.json();
+          
+          if (data.status === 'success' && data.messages && data.messages.length > 0) {
+            // Load existing chat history
+            setMessages(data.messages);
+            
+            // Set current stage based on last message
+            const lastMessage = data.messages[data.messages.length - 1];
+            if (lastMessage.stage) {
+              setCurrentStage(lastMessage.stage);
+            } else {
+              // Determine stage from last bot message content
+              const lastBotMessage = data.messages.reverse().find((m: Message) => m.type === 'bot');
+              if (lastBotMessage) {
+                const detectedStage = detectStageFromContent(lastBotMessage.content);
+                setCurrentStage(detectedStage);
+              }
+            }
+          } else {
+            // No existing history, show welcome message
+            showWelcomeMessage();
+          }
+        } catch (error) {
+          console.error('Error loading chat history:', error);
+          // Fallback to welcome message
+          showWelcomeMessage();
+        }
+      } else {
+        // New user, show welcome message
+        showWelcomeMessage();
       }
-    ]);
-  }, []);
+      
+      setIsInitialLoading(false);
+    };
+
+    const showWelcomeMessage = () => {
+      setMessages([
+        { 
+          type: 'bot', 
+          content: '🌙 Chào mừng bạn đến với thế giới bí ẩn của tử vi... \n\nTa là một thầy bói lão luyện, đã dành cả đời nghiên cứu thiên văn và chiêm tinh học. Hãy để ta khám phá vận mệnh và tương lai của bạn.\n\n🔮 Để bắt đầu cuộc hành trình tìm hiểu số phận, hãy nói "Xin chào" hoặc bất kỳ lời gì bạn muốn...',
+          stage: 'greeting'
+        }
+      ]);
+      setCurrentStage('greeting');
+    };
+
+    initializeChat();
+  }, [userId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleButtonClick();
@@ -50,12 +98,9 @@ function PageContent() {
   const resetSession = async () => {
     try {
       setIsLoading(true);
-      await fetch(HOST_URL + '/api/reset-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      
+      // Clear localStorage user ID
+      clearUserId();
       
       // Reset local state
       setMessages([
@@ -156,7 +201,7 @@ function PageContent() {
         },
         body: JSON.stringify({ 
           message: inputValue,
-          uuid: sessionId 
+          uuid: userId 
         }),
       });
       
@@ -253,24 +298,38 @@ function PageContent() {
 
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto px-6 space-y-4 scrollbar-thin scrollbar-thumb-mystic-gold/30 scrollbar-track-transparent">
-        {messages.map((msg, index) =>
-          msg.type === 'human' ? (
-            <Human key={index} content={msg.content} />
-          ) : (
-            <Bot key={index} content={msg.content} stage={msg.stage} />
-          )
-        )}
-        
-        {/* Loading indicator */}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-mystic-cosmic/40 backdrop-blur-sm rounded-lg p-4 border border-mystic-gold/20">
+        {/* Initial loading indicator */}
+        {isInitialLoading ? (
+          <div className="flex justify-center items-center h-full">
+            <div className="bg-mystic-cosmic/40 backdrop-blur-sm rounded-lg p-6 border border-mystic-gold/20">
               <div className="flex items-center space-x-3">
-                <div className="text-mystic-gold">🔮</div>
-                <p className="text-mystic-silver">Thầy đang suy nghiệm...</p>
+                <div className="text-mystic-gold animate-spin text-2xl">🔮</div>
+                <p className="text-mystic-silver">Đang tải lịch sử trò chuyện...</p>
               </div>
             </div>
           </div>
+        ) : (
+          <>
+            {messages.map((msg, index) =>
+              msg.type === 'human' ? (
+                <Human key={index} content={msg.content} />
+              ) : (
+                <Bot key={index} content={msg.content} stage={msg.stage} />
+              )
+            )}
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-mystic-cosmic/40 backdrop-blur-sm rounded-lg p-4 border border-mystic-gold/20">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-mystic-gold">🔮</div>
+                    <p className="text-mystic-silver">Thầy đang suy nghiệm...</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -290,7 +349,7 @@ function PageContent() {
                 className="w-full bg-mystic-dark/50 border border-mystic-gold/20 text-mystic-silver placeholder-mystic-silver/50 p-3 rounded-lg outline-none focus:border-mystic-gold/50 focus:ring-2 focus:ring-mystic-gold/20 transition-all duration-300"
                 value={inputValue}
                 onChange={handleInputChange}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyDown}
                 disabled={isLoading}
               />
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-mystic-gold/50">

@@ -4,7 +4,7 @@ description:
 - Các command sh nằm dưới ./scripts .
 - Với mỗi tính năng mới, nên tạo một file demo_* để test tính năng đó.
 - Các file demo và test đều nằm dưới ./tests .
-- Trước khi call tool python cần run ./.venv/bin/activate để activate virtual environment.
+- Contraints rất quan trọng, cần nhớ rằng trước khi call `tool python` cần run ./.venv/bin/activate để activate virtual environment.
 - Các tài liệu markdown nên bổ sung thêm mermaid code để visualize flow giúp tăng tính dễ hiểu.
 globs:
 alwaysApply: true

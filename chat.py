@@ -26,6 +26,8 @@ from llama_index.core.memory import ChatMemoryBuffer, ChatSummaryMemoryBuffer
 import json
 import tiktoken
 from models import ChatHistory, UserSession, Session as DBSession
+from contextlib import contextmanager
+import sqlite3
 # Convert to ChatMessage format
 from llama_index.core.llms import ChatMessage, MessageRole
 
@@ -736,82 +738,132 @@ class ConversationState(Enum):
     RESET = "reset"  # When user wants to start over
 
 # Database session management
-db_session = DBSession()
+def check_database_integrity():
+    """Check database integrity and fix if corrupted"""
+    try:
+        conn = sqlite3.connect('tuvi.db')
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA integrity_check;")
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result[0] != 'ok':
+            print(f"Database integrity check failed: {result[0]}")
+            return False
+        return True
+    except Exception as e:
+        print(f"Error checking database integrity: {e}")
+        return False
+
+def recreate_database():
+    """Recreate database from scratch"""
+    try:
+        from models import Base, engine
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+        print("Database recreated successfully")
+        return True
+    except Exception as e:
+        print(f"Failed to recreate database: {e}")
+        return False
+
+@contextmanager
+def get_db_session():
+    """Context manager for database sessions"""
+    session = DBSession()
+    try:
+        yield session
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Database error: {e}")
+        # Try to recreate database if corrupted
+        if "malformed" in str(e).lower() or "corrupted" in str(e).lower():
+            print("Database appears corrupted, attempting to recreate...")
+            recreate_database()
+        raise e
+    finally:
+        session.close()
 
 def get_or_create_session(user_id="default"):
     """Get or create user session from database"""
-    session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
-    
-    if not session_record:
-        # Create new session
-        session_record = UserSession(
-            session_id=user_id,
-            current_step=ConversationState.GREETING.value,
-            collected_info=json.dumps({}),
-            memory_summary=""
-        )
-        db_session.add(session_record)
-        db_session.commit()
-    
-    return {
-        'state': ConversationState(session_record.current_step),
-        'collected_info': json.loads(session_record.collected_info or '{}'),
-        'memory_summary': session_record.memory_summary or ""
-    }
+    with get_db_session() as db_session:
+        session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
+        
+        if not session_record:
+            # Create new session
+            session_record = UserSession(
+                session_id=user_id,
+                current_step=ConversationState.GREETING.value,
+                collected_info=json.dumps({}),
+                memory_summary=""
+            )
+            db_session.add(session_record)
+            db_session.commit()
+        
+        return {
+            'state': ConversationState(session_record.current_step),
+            'collected_info': json.loads(session_record.collected_info or '{}'),
+            'memory_summary': session_record.memory_summary or ""
+        }
 
 def update_session(user_id="default", state=None, collected_info=None, memory_summary=None):
     """Update user session in database"""
-    session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
-    
-    if session_record:
-        if state:
-            session_record.current_step = state.value if isinstance(state, ConversationState) else state
-        if collected_info is not None:
-            session_record.collected_info = json.dumps(collected_info)
-        if memory_summary is not None:
-            session_record.memory_summary = memory_summary
+    with get_db_session() as db_session:
+        session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
         
-        db_session.commit()
+        if session_record:
+            if state:
+                session_record.current_step = state.value if isinstance(state, ConversationState) else state
+            if collected_info is not None:
+                session_record.collected_info = json.dumps(collected_info)
+            if memory_summary is not None:
+                session_record.memory_summary = memory_summary
+            
+            db_session.commit()
 
 def reset_session(user_id="default"):
     """Reset user session in database"""
-    session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
-    
-    if session_record:
-        session_record.current_step = ConversationState.GREETING.value
-        session_record.collected_info = json.dumps({})
-        session_record.memory_summary = ""
+    with get_db_session() as db_session:
+        session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
+        
+        if session_record:
+            session_record.current_step = ConversationState.GREETING.value
+            session_record.collected_info = json.dumps({})
+            session_record.memory_summary = ""
+            db_session.commit()
+        
+        # Also clear chat history for this session
+        db_session.query(ChatHistory).filter(ChatHistory.user_id == user_id).delete()
         db_session.commit()
-    
-    # Also clear chat history for this session
-    db_session.query(ChatHistory).filter(ChatHistory.user_id == user_id).delete()
-    db_session.commit()
 
 def save_chat_message(user_id="default", message="", role="user", state=None, extracted_info=None):
     """Save chat message to database"""
-    chat_record = ChatHistory(
-        user_id=user_id,
-        message=message,
-        role=role,
-        step=state.value if isinstance(state, ConversationState) else state,
-        extracted_info=json.dumps(extracted_info) if extracted_info else None
-    )
-    db_session.add(chat_record)
-    db_session.commit()
+    with get_db_session() as db_session:
+        chat_record = ChatHistory(
+            user_id=user_id,
+            message=message,
+            role=role,
+            step=state.value if isinstance(state, ConversationState) else state,
+            extracted_info=json.dumps(extracted_info) if extracted_info else None
+        )
+        db_session.add(chat_record)
+        db_session.commit()
 
 def get_chat_history(user_id="default", limit=50):
     """Get chat history from database"""
-    history = db_session.query(ChatHistory).filter(
-        ChatHistory.user_id == user_id
-    ).order_by(ChatHistory.created_at.desc()).limit(limit).all()
-    
-    return [{
-        'message': h.message,
-        'role': h.role,
-        'step': h.step,
-        'extracted_info': json.loads(h.extracted_info) if h.extracted_info else None,
-        'created_at': h.created_at
-    } for h in reversed(history)]
+    with get_db_session() as db_session:
+        history = db_session.query(ChatHistory).filter(
+            ChatHistory.user_id == user_id
+        ).order_by(ChatHistory.created_at.desc()).limit(limit).all()
+        
+        return [{
+            'message': h.message,
+            'role': h.role,
+            'step': h.step,
+            'extracted_info': json.loads(h.extracted_info) if h.extracted_info else None,
+            'created_at': h.created_at
+        } for h in reversed(history)]
 
 def create_memory_buffer(user_id="default"):
     """Create ChatSummaryMemoryBuffer for user session"""
