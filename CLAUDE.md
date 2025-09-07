@@ -38,8 +38,6 @@ This is a Vietnamese astrology (Tử Vi) chatbot application with a Python Flask
 - **models.py**: SQLAlchemy database models
   - SQLite database (`tuvi.db`) for storing requests, users, zodiac data
   - Models: Request, User, Zodiac, Star, CanChi, MasterData
-- **retrieve_chroma.py**: ChromaDB vector store operations
-- **batch_index.py**, **save_chunk.py**, **seed.py**: Data processing utilities
 
 ### Frontend Structure (Next.js 14 + TypeScript)
 - **App Router**: Uses Next.js 14 app directory structure
@@ -76,7 +74,5 @@ OPENAI_API_KEY=your_openai_api_key
 - Contains Vietnamese astrology reference data (stars, zodiac signs, etc.)
 - Stores user requests and generated horoscope data
 
-### Vector Storage
-- ChromaDB persistent storage in `./chroma_db/` directory
-- Contains Vietnamese astrology knowledge for RAG retrieval
-- Uses OpenAI embeddings for semantic search
+## Constraints debugging
+- Run `./.venv/bin/activate` for activate virtual environment before running command python.

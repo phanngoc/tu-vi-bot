@@ -59,7 +59,7 @@ class User(Base):
     birth_date = Column(Date)
     birth_hour = Column(Time)
     gender = Column(Enum('Nam', 'Nữ', name='gender'))
-    created_at = Column(TIMESTAMP, server_default='CURRENT_TIMESTAMP')
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class UserZodiac(Base):
     __tablename__ = 'user_zodiac'
@@ -67,6 +67,26 @@ class UserZodiac(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     zodiac_id = Column(Integer, ForeignKey('zodiac.id'), nullable=False)
     star_id = Column(Integer, ForeignKey('stars.id'), nullable=False)
+
+class ChatHistory(Base):
+    __tablename__ = 'chat_history'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False)  # session_id hoặc user_id
+    message = Column(Text, nullable=False)
+    role = Column(Enum('user', 'assistant', name='chat_role'), nullable=False)
+    step = Column(String(50), nullable=True)  # CollectionStep hiện tại
+    extracted_info = Column(Text, nullable=True)  # JSON string chứa thông tin đã trích xuất
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class UserSession(Base):
+    __tablename__ = 'user_sessions'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(100), nullable=False, unique=True)
+    current_step = Column(String(50), nullable=False)
+    collected_info = Column(Text, nullable=True)  # JSON string chứa thông tin đã thu thập
+    memory_summary = Column(Text, nullable=True)  # Tóm tắt từ ChatSummaryMemoryBuffer
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
 # Create an engine and a session
