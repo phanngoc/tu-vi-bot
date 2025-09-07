@@ -19,6 +19,10 @@ from llama_index.core import (
     StorageContext,
     load_index_from_storage,
 )
+from llama_index.core import Settings
+from llama_index.core.tools import FunctionTool
+from llama_index.core.agent import ReActAgent
+from llama_index.core.memory import ChatMemoryBuffer
 
 MODEL_NAME = "gpt-4o-mini"
 MODEL_EMBEDDING_NAME = "text-embedding-3-small"
@@ -232,77 +236,56 @@ def reset_session(user_id="default"):
 # ReActAgent Tools for step-by-step information collection
 
 def extract_name_from_message(message: str) -> str:
-    """Extract name from message using simple pattern matching"""
-    import re
-    
-    # Look for common patterns like "tôi tên", "tên tôi là", "tên là"
-    patterns = [
-        r'tôi tên\s+([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
-        r'tên tôi là\s+([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
-        r'tên là\s+([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
-        r'tên:\s*([A-Za-zÀ-ỹ\s]+?)(?:\s*,|\s*sinh|\s*ngày|$)',
-        r'^([A-Za-zÀ-ỹ]+(?:\s+[A-Za-zÀ-ỹ]+){0,3})(?:\s*,|\s*sinh|\s*ngày)'
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, message.strip(), re.IGNORECASE)
-        if match:
-            name = match.group(1).strip()
-            if len(name) >= 2 and not any(char.isdigit() for char in name):  # At least 2 characters and no numbers
-                return f"Tên được xác nhận: {name}"
-    
-    return "Chưa thể xác định tên. Vui lòng cung cấp tên của bạn rõ ràng."
+    """Extract name from message using FunctionCallingProgram"""
+    try:
+        result = name_extraction_program(message=message)
+        if result.is_valid and result.confidence in ['cao', 'trung bình']:
+            return f"Tên được xác nhận: {result.name}"
+        else:
+            return "Chưa thể xác định tên. Vui lòng cung cấp tên của bạn rõ ràng."
+    except Exception as e:
+        return "Chưa thể xác định tên. Vui lòng cung cấp tên của bạn rõ ràng."
 
 def extract_birth_date_from_message(message: str) -> str:
-    """Extract birth date from message using regex"""
-    import re
-    
-    # Look for DD/MM/YYYY pattern
-    pattern = r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b'
-    match = re.search(pattern, message)
-    
-    if match:
-        day, month, year = match.groups()
-        try:
-            # Validate date
-            datetime.strptime(f"{day}/{month}/{year}", "%d/%m/%Y")
-            return f"Ngày sinh được xác nhận: {day}/{month}/{year}"
-        except:
-            return "Ngày sinh không hợp lệ. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
-    
-    return "Chưa thể xác định ngày sinh. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
+    """Extract birth date from message using FunctionCallingProgram"""
+    try:
+        result = date_extraction_program(message=message)
+        if result.is_valid:
+            # Validate date using datetime
+            try:
+                datetime.strptime(result.date, "%d/%m/%Y")
+                return f"Ngày sinh được xác nhận: {result.date}"
+            except:
+                return "Ngày sinh không hợp lệ. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
+        else:
+            return "Chưa thể xác định ngày sinh. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
+    except Exception as e:
+        return "Chưa thể xác định ngày sinh. Vui lòng cung cấp theo định dạng DD/MM/YYYY."
 
 def extract_birth_time_from_message(message: str) -> str:
-    """Extract birth time from message using regex"""
-    import re
-    
-    # Look for HH:MM pattern
-    pattern = r'\b(\d{1,2}):(\d{2})\b'
-    match = re.search(pattern, message)
-    
-    if match:
-        hour, minute = match.groups()
-        try:
-            hour_int = int(hour)
-            minute_int = int(minute)
-            if 0 <= hour_int <= 23 and 0 <= minute_int <= 59:
-                return f"Giờ sinh được xác nhận: {hour.zfill(2)}:{minute}"
+    """Extract birth time from message using FunctionCallingProgram"""
+    try:
+        result = time_extraction_program(message=message)
+        if result.is_valid:
+            # Additional validation
+            if 0 <= result.hour <= 23 and 0 <= result.minute <= 59:
+                return f"Giờ sinh được xác nhận: {result.time}"
             else:
                 return "Giờ sinh không hợp lệ. Vui lòng cung cấp giờ từ 00:00 đến 23:59."
-        except:
-            return "Giờ sinh không hợp lệ. Vui lòng cung cấp theo định dạng HH:MM."
-    
-    return "Chưa thể xác định giờ sinh. Vui lòng cung cấp theo định dạng HH:MM."
+        else:
+            return "Chưa thể xác định giờ sinh. Vui lòng cung cấp theo định dạng HH:MM."
+    except Exception as e:
+        return "Chưa thể xác định giờ sinh. Vui lòng cung cấp theo định dạng HH:MM."
 
 def extract_gender_from_message(message: str) -> str:
-    """Extract gender from message"""
-    message_lower = message.lower()
-    
-    if any(word in message_lower for word in ['nam', 'male', 'boy', 'trai']):
-        return "Giới tính được xác nhận: Nam"
-    elif any(word in message_lower for word in ['nữ', 'female', 'girl', 'gái']):
-        return "Giới tính được xác nhận: Nữ"
-    else:
+    """Extract gender from message using FunctionCallingProgram"""
+    try:
+        result = gender_extraction_program(message=message)
+        if result.is_valid and result.gender in ['Nam', 'Nữ']:
+            return f"Giới tính được xác nhận: {result.gender}"
+        else:
+            return "Chưa thể xác định giới tính. Vui lòng chọn Nam hoặc Nữ."
+    except Exception as e:
         return "Chưa thể xác định giới tính. Vui lòng chọn Nam hoặc Nữ."
 
 def provide_guidance_for_missing_info(current_info: str) -> str:
@@ -659,33 +642,68 @@ query_engine = tu_vi_index.as_query_engine(
     output_cls=ComprehensiveTuviReading, response_mode="tree_summarize", llm=llm_4
 )
 
-# Create FunctionTool instances for ReActAgent
-name_extraction_tool = FunctionTool.from_defaults(
-    fn=extract_name_from_message,
-    name="extract_name",
-    description="Extract user name from a message"
+# Create FunctionCallingPrograms for structured extraction
+class NameExtraction(BaseModel):
+    """Data model for name extraction."""
+    name: str = Field(description="Tên người dùng được trích xuất từ tin nhắn")
+    is_valid: bool = Field(description="Tên có hợp lệ không (ít nhất 2 ký tự, không chứa số)")
+    confidence: str = Field(description="Mức độ tin cậy: cao/trung bình/thấp")
+
+class DateExtraction(BaseModel):
+    """Data model for birth date extraction."""
+    date: str = Field(description="Ngày sinh theo định dạng DD/MM/YYYY")
+    is_valid: bool = Field(description="Ngày sinh có hợp lệ không")
+    day: int = Field(description="Ngày")
+    month: int = Field(description="Tháng") 
+    year: int = Field(description="Năm")
+
+class TimeExtraction(BaseModel):
+    """Data model for birth time extraction."""
+    time: str = Field(description="Giờ sinh theo định dạng HH:MM")
+    is_valid: bool = Field(description="Giờ sinh có hợp lệ không")
+    hour: int = Field(description="Giờ (0-23)")
+    minute: int = Field(description="Phút (0-59)")
+
+class GenderExtraction(BaseModel):
+    """Data model for gender extraction."""
+    gender: str = Field(description="Giới tính: Nam hoặc Nữ")
+    is_valid: bool = Field(description="Giới tính có hợp lệ không")
+    confidence: str = Field(description="Mức độ tin cậy: cao/trung bình/thấp")
+
+# FunctionCallingPrograms
+name_extraction_program = FunctionCallingProgram.from_defaults(
+    output_cls=NameExtraction,
+    prompt_template_str="Từ tin nhắn '{message}', hãy trích xuất tên người dùng. Chỉ lấy phần tên thực sự, bỏ qua các từ như 'tôi tên', 'tên tôi là'. Tên phải có ít nhất 2 ký tự và không chứa số. Đánh giá độ tin cậy: cao (rất chắc chắn), trung bình (khá chắc), thấp (không chắc).",
+    verbose=False,
+    llm=llm
 )
-date_extraction_tool = FunctionTool.from_defaults(
-    fn=extract_birth_date_from_message,
-    name="extract_birth_date", 
-    description="Extract birth date from a message"
+
+date_extraction_program = FunctionCallingProgram.from_defaults(
+    output_cls=DateExtraction,
+    prompt_template_str="Từ tin nhắn '{message}', hãy trích xuất ngày sinh. Tìm định dạng DD/MM/YYYY. Trả về date dưới dạng DD/MM/YYYY, và phân tách day, month, year thành các số riêng.",
+    verbose=False,
+    llm=llm
 )
-time_extraction_tool = FunctionTool.from_defaults(
-    fn=extract_birth_time_from_message,
-    name="extract_birth_time",
-    description="Extract birth time from a message"
+
+time_extraction_program = FunctionCallingProgram.from_defaults(
+    output_cls=TimeExtraction,
+    prompt_template_str="Từ tin nhắn '{message}', hãy trích xuất giờ sinh. Tìm định dạng HH:MM hoặc các biểu thức thời gian. Trả về time dưới dạng HH:MM (24h), và phân tách hour (0-23), minute (0-59).",
+    verbose=False,
+    llm=llm
 )
-gender_extraction_tool = FunctionTool.from_defaults(
-    fn=extract_gender_from_message,
-    name="extract_gender",
-    description="Extract gender from a message"
+
+gender_extraction_program = FunctionCallingProgram.from_defaults(
+    output_cls=GenderExtraction,
+    prompt_template_str="Từ tin nhắn '{message}', hãy xác định giới tính. Tìm các từ khóa về giới tính. Chỉ trả về 'Nam' hoặc 'Nữ' trong trường gender. Đánh giá độ tin cậy: cao/trung bình/thấp.",
+    verbose=False,
+    llm=llm
 )
+# Create guidance tool using the traditional approach (still needed for the step-by-step functions)
 guidance_tool = FunctionTool.from_defaults(
     fn=provide_guidance_for_missing_info,
     name="provide_guidance",
     description="Provide guidance for missing information"
 )
-# Legacy analysis tool removed - now using step-by-step approach
 
 # Create FunctionTool instances for step-by-step ReActAgent
 step_1_tool = FunctionTool.from_defaults(
@@ -718,16 +736,48 @@ reset_session_tool = FunctionTool.from_defaults(
     description="Reset session to start a new consultation"
 )
 
-# Step-by-step tools for ReActAgent reasoning
-step_tools_dict = {
-    'step_1': process_step_1_name,
-    'step_2': process_step_2_birthday_time,
-    'step_3': process_step_3_gender,
-    'final_analysis': generate_final_tuvi_analysis,
-    'reset_session': reset_session
-}
 
-# Legacy conversation handling functions removed - now using ReActAgent
+# System prompt for ReActAgent - tham khảo từ demo
+REACT_SYSTEM_PROMPT = """
+Bạn là một trợ lý AI thông minh chuyên thu thập thông tin để tính lá số tử vi.
+
+**MỤC TIÊU:** Thu thập đầy đủ 4 thông tin: Tên, Ngày sinh, Giờ sinh, Giới tính
+
+**NGUYÊN TẮC:**
+1. Sử dụng tools để phân tích tin nhắn một cách thông minh
+2. Luôn cung cấp feedback tích cực và hướng dẫn rõ ràng  
+3. Sử dụng context từ cuộc hội thoại để đưa ra gợi ý phù hợp
+4. Khuyến khích người dùng cung cấp thông tin hiệu quả
+
+**PHONG CÁCH:** Thân thiện, chuyên nghiệp, sử dụng emoji phù hợp
+
+Hãy bắt đầu bằng việc phân tích tin nhắn và cung cấp hướng dẫn!
+"""
+
+def create_react_agent():
+    """Tạo ReActAgent với đầy đủ tools và cấu hình - tham khảo từ demo"""
+    tools = [
+        guidance_tool,
+        final_analysis_tool,
+        reset_session_tool,
+        step_1_tool,
+        step_2_tool,
+        step_3_tool,
+    ]
+    
+    # Create memory buffer
+    memory = ChatMemoryBuffer.from_defaults(token_limit=40000)
+    
+    agent = ReActAgent(
+        tools=tools,
+        llm=llm,
+        memory=memory,
+        verbose=False  # Less verbose for better UX
+    )
+    
+    return agent
+
+agent = create_react_agent()
 
 def prompt_to_predict(questionMessage='', user_id='default'):
     """Entry point for step-by-step progressive tử vi consultation"""

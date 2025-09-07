@@ -75,4 +75,4 @@ OPENAI_API_KEY=your_openai_api_key
 - Stores user requests and generated horoscope data
 
 ## Constraints debugging
-- Run ./.venv/bin/activate for activate virtual environment before running command.
+- Run `./.venv/bin/activate` for activate virtual environment before running command python.

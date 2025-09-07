@@ -1,0 +1,9 @@
+---
+description:
+- Mọi tài liệu đều nằm dưới ./docs .
+- Các command đều nằm dưới ./scripts .
+- Các file demo và test đều nằm dưới ./tests .
+- Trước khi call tool python cần source ./.venv/bin/activate để activate virtual environment.
+globs:
+alwaysApply: true
+---

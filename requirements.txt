@@ -61,6 +61,7 @@ llama-index-program-openai==0.2.0
 llama-index-question-gen-openai==0.2.0
 llama-index-readers-file==0.2.2
 llama-index-readers-llama-parse==0.3.0
+llama-index-storage-chat-store-sqlite==0.3.1
 llama-parse==0.5.6
 marisa-trie==1.2.0
 markdown-it-py==3.0.0
