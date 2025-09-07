@@ -1,0 +1,25 @@
+# # .claude/agents/team-config.yaml
+# agents:
+#   - source: wshobson/agents/backend-architect
+#     version: 2.4.0
+#     customizations:
+#       additional_tools: [docker, kubernetes]
+#       context_limit: 150000
+  
+#   - source: dl-ezo/security-specialist
+#     version: 1.8.2
+#     customizations:
+#       security_frameworks: [OWASP, NIST]
+#       auto_audit: true
+  
+#   - source: community/performance-optimizer
+#     version: 3.1.0
+#     customizations:
+#       profiling_tools: [prometheus, grafana]
+#       optimization_threshold: 0.2 # 20% improvement target
+
+# workflow:
+#   parallel_limit: 8
+#   token_budget: 500000
+#   coordination_protocol: message_queue
+#   result_aggregation: consensus_voting

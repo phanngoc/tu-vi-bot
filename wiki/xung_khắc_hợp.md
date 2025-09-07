@@ -1,4 +1,4 @@
-Tuyệt vời! Dưới đây là các **Mermaid diagrams** để bạn copy-paste dùng ngay, thể hiện **tương sinh – tương khắc (ngũ hành)** và **tam hợp – tứ hành xung (12 địa chi)**.
+# Dưới đây là các **Mermaid diagrams** để bạn copy-paste dùng ngay, thể hiện **tương sinh – tương khắc (ngũ hành)** và **tam hợp – tứ hành xung (12 địa chi)**.
 
 ---
 
