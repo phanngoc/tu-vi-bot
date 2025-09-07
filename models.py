@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from sqlalchemy import Column, DateTime, Integer, String, Text, Enum, ForeignKey, Date, Time, TIMESTAMP, create_engine
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -71,7 +72,7 @@ class UserZodiac(Base):
 class ChatHistory(Base):
     __tablename__ = 'chat_history'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), nullable=False)  # session_id hoặc user_id
+    user_id = Column(String(100), nullable=False, default=lambda: str(uuid.uuid4()))  # session_id hoặc user_id
     message = Column(Text, nullable=False)
     role = Column(Enum('user', 'assistant', name='chat_role'), nullable=False)
     step = Column(String(50), nullable=True)  # CollectionStep hiện tại
@@ -90,7 +91,6 @@ class UserSession(Base):
 
 
 # Create an engine and a session
-engine = create_engine('sqlite:///tuvi.db')
+engine = create_engine('sqlite:///tuvi.db', pool_pre_ping=True, pool_recycle=300)
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
-session = Session()

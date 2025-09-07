@@ -26,6 +26,10 @@ from llama_index.core.memory import ChatMemoryBuffer, ChatSummaryMemoryBuffer
 import json
 import tiktoken
 from models import ChatHistory, UserSession, Session as DBSession
+from contextlib import contextmanager
+import sqlite3
+# Convert to ChatMessage format
+from llama_index.core.llms import ChatMessage, MessageRole
 
 MODEL_NAME = "gpt-4o-mini"
 MODEL_EMBEDDING_NAME = "text-embedding-3-small"
@@ -100,8 +104,18 @@ def get_gio_sinh(hour):
     return list(gio_mapping.keys())[hour % 12]
 
 
-def an_sao_tuvi_comprehensive(day, month, year, hour, gender):
-    """Hệ thống an sao toàn diện theo phương pháp tử vi truyền thống"""
+def an_sao_tuvi_comprehensive(day, month, year, hour, gender, current_year=None, current_month=None, current_day=None):
+    """Hệ thống an sao toàn diện theo phương pháp tử vi truyền thống với phân tích vận mệnh"""
+    from datetime import datetime
+    
+    # Sử dụng thời gian hiện tại nếu không được cung cấp
+    if current_year is None:
+        current_year = datetime.now().year
+    if current_month is None:
+        current_month = datetime.now().month
+    if current_day is None:
+        current_day = datetime.now().day
+    
     cung_names = ['Mệnh', 'Phụ Mẫu', 'Phúc Đức', 'Điền Trạch', 'Quan Lộc', 'Nô Bộc', 
                   'Thiên Di', 'Tật Ách', 'Tài Bạch', 'Tử Tức', 'Phu Thê', 'Huynh Đệ']
     
@@ -176,6 +190,22 @@ def an_sao_tuvi_comprehensive(day, month, year, hour, gender):
         if cung_name in sao_cung:
             sao_cung[cung_name].append(sao)
     
+    # Tính toán vận hạn
+    current_age = current_year - year + 1
+    dai_van = calculate_dai_van(year, gender, menh_cung_chi)
+    tieu_van = calculate_tieu_van(current_year, year, thien_can)
+    luu_thang = calculate_luu_thang(current_year, current_month, month)
+    luu_ngay = calculate_luu_ngay(current_day, day)
+    
+    # Tính điểm số các cung
+    cung_scores = calculate_all_cung_scores(sao_cung, menh_cung_chi)
+    
+    # Phân tích vận mệnh
+    fortune_analysis = generate_fortune_analysis(cung_scores, dai_van, tieu_van, current_age)
+    
+    # Tạo khuyến nghị
+    guidance = generate_guidance_recommendations(fortune_analysis)
+    
     return {
         'basic_info': {
             'birth_info': f"{day}/{month}/{year} giờ {gio_sinh}",
@@ -183,11 +213,22 @@ def an_sao_tuvi_comprehensive(day, month, year, hour, gender):
             'dia_chi': dia_chi, 
             'cuc': cuc,
             'gender': gender,
-            'menh_cung': menh_cung_chi
+            'menh_cung': menh_cung_chi,
+            'current_age': current_age
         },
         'sao_cung': sao_cung,
-        'trang_sinh': trang_sinh_cycle
+        'trang_sinh': trang_sinh_cycle,
+        'fortune': {
+            'dai_van': dai_van,
+            'tieu_van': tieu_van,
+            'luu_thang': luu_thang,
+            'luu_ngay': luu_ngay
+        },
+        'analysis': fortune_analysis,
+        'guidance': guidance,
+        'cung_scores': cung_scores
     }
+
 
 def get_tu_hoa_stars(thien_can):
     """Lấy 4 hóa tinh theo Thiên Can"""
@@ -205,6 +246,489 @@ def get_tu_hoa_stars(thien_can):
     }
     return tu_hoa_mapping.get(thien_can, {})
 
+
+def calculate_dai_van(birth_year, gender, menh_cung_chi):
+    """Tính Đại vận (10 năm/cung) theo chiều thuận/nghịch"""
+    chi_positions = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi']
+    cung_names = ['Mệnh', 'Phụ Mẫu', 'Phúc Đức', 'Điền Trạch', 'Quan Lộc', 'Nô Bộc', 
+                  'Thiên Di', 'Tật Ách', 'Tài Bạch', 'Tử Tức', 'Phu Thê', 'Huynh Đệ']
+    
+    menh_index = chi_positions.index(menh_cung_chi)
+    
+    # Xác định chiều đi của đại vận (thuận/nghịch)
+    # Nam dương, Nữ âm: thuận (tăng dần)
+    # Nam âm, Nữ dương: nghịch (giảm dần)
+    # Giả sử nam = dương, nữ = âm
+    is_forward = (gender == 'Nam')
+    
+    dai_van = []
+    current_age = 10  # Bắt đầu từ 10 tuổi
+    
+    for i in range(12):  # 12 cung, mỗi cung 10 năm
+        if is_forward:
+            cung_index = (menh_index + i) % 12
+        else:
+            cung_index = (menh_index - i) % 12
+        
+        cung_name = cung_names[cung_index]
+        chi_name = chi_positions[cung_index]
+        
+        dai_van.append({
+            'age_range': f"{current_age}-{current_age + 9}",
+            'cung': cung_name,
+            'chi': chi_name,
+            'start_age': current_age,
+            'end_age': current_age + 9
+        })
+        
+        current_age += 10
+    
+    return dai_van
+
+
+def calculate_tieu_van(current_year, birth_year, thien_can_year):
+    """Tính Tiểu vận (lưu niên) cho năm hiện tại"""
+    # Lưu niên = năm hiện tại - năm sinh + 1
+    age = current_year - birth_year + 1
+    
+    # Tính can năm hiện tại
+    can_names = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý']
+    can_index = current_year % 10
+    current_can = can_names[can_index]
+    
+    # Tính chi năm hiện tại
+    chi_names = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi']
+    chi_index = current_year % 12
+    current_chi = chi_names[chi_index]
+    
+    # Lấy 4 hóa tinh của năm hiện tại
+    current_tu_hoa = get_tu_hoa_stars(current_can)
+    
+    return {
+        'year': current_year,
+        'age': age,
+        'can_chi': f"{current_can} {current_chi}",
+        'tu_hoa': current_tu_hoa,
+        'description': f"Lưu niên {current_year} ({current_can} {current_chi})"
+    }
+
+
+def calculate_luu_thang(current_year, current_month, birth_month):
+    """Tính Lưu tháng (tháng hiện tại trong năm)"""
+    # Lưu tháng = tháng hiện tại - tháng sinh + 1
+    luu_thang = (current_month - birth_month + 1) % 12
+    if luu_thang == 0:
+        luu_thang = 12
+    
+    chi_names = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi']
+    chi_index = (current_month - 1) % 12
+    current_chi = chi_names[chi_index]
+    
+    return {
+        'month': current_month,
+        'luu_thang': luu_thang,
+        'chi': current_chi,
+        'description': f"Lưu tháng {luu_thang} ({current_chi})"
+    }
+
+
+def calculate_luu_ngay(current_day, birth_day):
+    """Tính Lưu ngày (ngày hiện tại trong tháng)"""
+    # Lưu ngày = ngày hiện tại - ngày sinh + 1
+    luu_ngay = (current_day - birth_day + 1) % 30
+    if luu_ngay == 0:
+        luu_ngay = 30
+    
+    chi_names = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi']
+    chi_index = (current_day - 1) % 12
+    current_chi = chi_names[chi_index]
+    
+    return {
+        'day': current_day,
+        'luu_ngay': luu_ngay,
+        'chi': current_chi,
+        'description': f"Lưu ngày {luu_ngay} ({current_chi})"
+    }
+
+
+def get_star_strength(star_name, chi_position):
+    """Xác định độ mạnh của sao tại vị trí địa chi (miếu/vượng/bình/nhược/hãm)"""
+    star_strength_map = {
+        'Tử Vi': {'Tý': 'hãm', 'Sửu': 'hãm', 'Dần': 'vượng', 'Mão': 'vượng', 'Thìn': 'miếu', 'Tỵ': 'miếu', 
+                 'Ngọ': 'miếu', 'Mùi': 'miếu', 'Thân': 'bình', 'Dậu': 'bình', 'Tuất': 'nhược', 'Hợi': 'nhược'},
+        'Thiên Phủ': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'bình', 'Mão': 'bình', 'Thìn': 'vượng', 'Tỵ': 'vượng',
+                     'Ngọ': 'vượng', 'Mùi': 'vượng', 'Thân': 'hãm', 'Dậu': 'hãm', 'Tuất': 'nhược', 'Hợi': 'nhược'},
+        'Thái Dương': {'Tý': 'hãm', 'Sửu': 'hãm', 'Dần': 'nhược', 'Mão': 'nhược', 'Thìn': 'bình', 'Tỵ': 'bình',
+                      'Ngọ': 'miếu', 'Mùi': 'miếu', 'Thân': 'vượng', 'Dậu': 'vượng', 'Tuất': 'hãm', 'Hợi': 'hãm'},
+        'Thái Âm': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'hãm', 'Mão': 'hãm', 'Thìn': 'nhược', 'Tỵ': 'nhược',
+                   'Ngọ': 'hãm', 'Mùi': 'hãm', 'Thân': 'bình', 'Dậu': 'bình', 'Tuất': 'vượng', 'Hợi': 'vượng'},
+        'Vũ Khúc': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'vượng', 'Mão': 'vượng', 'Thìn': 'bình', 'Tỵ': 'bình',
+                   'Ngọ': 'nhược', 'Mùi': 'nhược', 'Thân': 'hãm', 'Dậu': 'hãm', 'Tuất': 'miếu', 'Hợi': 'miếu'},
+        'Liêm Trinh': {'Tý': 'hãm', 'Sửu': 'hãm', 'Dần': 'miếu', 'Mão': 'miếu', 'Thìn': 'vượng', 'Tỵ': 'vượng',
+                      'Ngọ': 'bình', 'Mùi': 'bình', 'Thân': 'nhược', 'Dậu': 'nhược', 'Tuất': 'hãm', 'Hợi': 'hãm'},
+        'Thiên Tướng': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'bình', 'Mão': 'bình', 'Thìn': 'vượng', 'Tỵ': 'vượng',
+                       'Ngọ': 'vượng', 'Mùi': 'vượng', 'Thân': 'hãm', 'Dậu': 'hãm', 'Tuất': 'nhược', 'Hợi': 'nhược'},
+        'Phá Quân': {'Tý': 'vượng', 'Sửu': 'vượng', 'Dần': 'miếu', 'Mão': 'miếu', 'Thìn': 'bình', 'Tỵ': 'bình',
+                    'Ngọ': 'hãm', 'Mùi': 'hãm', 'Thân': 'nhược', 'Dậu': 'nhược', 'Tuất': 'vượng', 'Hợi': 'vượng'},
+        'Tham Lang': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'vượng', 'Mão': 'vượng', 'Thìn': 'bình', 'Tỵ': 'bình',
+                     'Ngọ': 'nhược', 'Mùi': 'nhược', 'Thân': 'hãm', 'Dậu': 'hãm', 'Tuất': 'miếu', 'Hợi': 'miếu'},
+        'Cự Môn': {'Tý': 'vượng', 'Sửu': 'vượng', 'Dần': 'miếu', 'Mão': 'miếu', 'Thìn': 'bình', 'Tỵ': 'bình',
+                  'Ngọ': 'hãm', 'Mùi': 'hãm', 'Thân': 'nhược', 'Dậu': 'nhược', 'Tuất': 'vượng', 'Hợi': 'vượng'},
+        'Thiên Đồng': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'bình', 'Mão': 'bình', 'Thìn': 'vượng', 'Tỵ': 'vượng',
+                      'Ngọ': 'vượng', 'Mùi': 'vượng', 'Thân': 'hãm', 'Dậu': 'hãm', 'Tuất': 'nhược', 'Hợi': 'nhược'},
+        'Thiên Cơ': {'Tý': 'hãm', 'Sửu': 'hãm', 'Dần': 'nhược', 'Mão': 'nhược', 'Thìn': 'bình', 'Tỵ': 'bình',
+                    'Ngọ': 'miếu', 'Mùi': 'miếu', 'Thân': 'vượng', 'Dậu': 'vượng', 'Tuất': 'hãm', 'Hợi': 'hãm'},
+        'Thiên Lương': {'Tý': 'miếu', 'Sửu': 'miếu', 'Dần': 'vượng', 'Mão': 'vượng', 'Thìn': 'bình', 'Tỵ': 'bình',
+                       'Ngọ': 'nhược', 'Mùi': 'nhược', 'Thân': 'hãm', 'Dậu': 'hãm', 'Tuất': 'miếu', 'Hợi': 'miếu'},
+        'Thất Sát': {'Tý': 'vượng', 'Sửu': 'vượng', 'Dần': 'miếu', 'Mão': 'miếu', 'Thìn': 'bình', 'Tỵ': 'bình',
+                    'Ngọ': 'hãm', 'Mùi': 'hãm', 'Thân': 'nhược', 'Dậu': 'nhược', 'Tuất': 'vượng', 'Hợi': 'vượng'}
+    }
+    
+    return star_strength_map.get(star_name, {}).get(chi_position, 'bình')
+
+
+def get_star_weight(star_name, cung_name):
+    """Lấy trọng số của sao tại cung cụ thể"""
+    star_weights = {
+        'Tử Vi': {'Mệnh': 3, 'Quan Lộc': 2, 'Tài Bạch': 1, 'Phu Thê': 1, 'Tử Tức': 1, 'Phúc Đức': 1},
+        'Thiên Phủ': {'Tài Bạch': 2, 'Mệnh': 2, 'Quan Lộc': 1, 'Phu Thê': 1, 'Điền Trạch': 1},
+        'Thái Dương': {'Mệnh': 2, 'Quan Lộc': 2, 'Phụ Mẫu': 1, 'Huynh Đệ': 1, 'Thiên Di': 1},
+        'Thái Âm': {'Mệnh': 2, 'Tài Bạch': 2, 'Phu Thê': 1, 'Tử Tức': 1, 'Phúc Đức': 1},
+        'Vũ Khúc': {'Tài Bạch': 3, 'Quan Lộc': 2, 'Mệnh': 1, 'Phu Thê': 1},
+        'Liêm Trinh': {'Mệnh': 2, 'Quan Lộc': 2, 'Tật Ách': 1, 'Thiên Di': 1},
+        'Thiên Tướng': {'Mệnh': 2, 'Quan Lộc': 2, 'Phu Thê': 1, 'Tử Tức': 1},
+        'Phá Quân': {'Mệnh': 2, 'Quan Lộc': 1, 'Tài Bạch': 1, 'Tật Ách': 1},
+        'Tham Lang': {'Mệnh': 2, 'Tài Bạch': 2, 'Phu Thê': 1, 'Tử Tức': 1},
+        'Cự Môn': {'Mệnh': 2, 'Quan Lộc': 1, 'Tài Bạch': 1, 'Phụ Mẫu': 1},
+        'Thiên Đồng': {'Mệnh': 2, 'Phúc Đức': 2, 'Tử Tức': 1, 'Huynh Đệ': 1},
+        'Thiên Cơ': {'Mệnh': 2, 'Phụ Mẫu': 2, 'Huynh Đệ': 1, 'Thiên Di': 1},
+        'Thiên Lương': {'Mệnh': 2, 'Phúc Đức': 2, 'Phụ Mẫu': 1, 'Huynh Đệ': 1},
+        'Thất Sát': {'Mệnh': 2, 'Quan Lộc': 2, 'Tật Ách': 1, 'Thiên Di': 1},
+        'Hóa Lộc': {'Tài Bạch': 3, 'Mệnh': 2, 'Phu Thê': 1, 'Quan Lộc': 1},
+        'Hóa Quyền': {'Quan Lộc': 3, 'Mệnh': 2, 'Tài Bạch': 1, 'Phu Thê': 1},
+        'Hóa Khoa': {'Mệnh': 2, 'Quan Lộc': 2, 'Tài Bạch': 1, 'Phúc Đức': 1},
+        'Hóa Kỵ': {'Tật Ách': 3, 'Mệnh': -2, 'Tài Bạch': -1, 'Quan Lộc': -1},
+        'Kình Dương': {'Mệnh': -2, 'Quan Lộc': -2, 'Tài Bạch': -1, 'Tật Ách': -1},
+        'Đà La': {'Mệnh': -2, 'Quan Lộc': -1, 'Tài Bạch': -1, 'Tật Ách': -1},
+        'Không Kiếp': {'Tài Bạch': -2, 'Mệnh': -1, 'Quan Lộc': -1, 'Phu Thê': -1},
+        'Tả Hữu': {'Mệnh': 1, 'Quan Lộc': 1, 'Tài Bạch': 1, 'Phu Thê': 1},
+        'Khôi Việt': {'Quan Lộc': 2, 'Mệnh': 1, 'Tài Bạch': 1, 'Phúc Đức': 1},
+        'Xương Khúc': {'Mệnh': 1, 'Quan Lộc': 1, 'Tài Bạch': 1, 'Phúc Đức': 1}
+    }
+    
+    return star_weights.get(star_name, {}).get(cung_name, 0)
+
+
+def calculate_cung_score(sao_cung, cung_name, chi_position):
+    """Tính điểm số cho một cung dựa trên sao và vị trí"""
+    base_score = 0
+    star_details = []
+    
+    for sao in sao_cung.get(cung_name, []):
+        # Lấy trọng số cơ bản
+        weight = get_star_weight(sao, cung_name)
+        
+        # Điều chỉnh theo độ mạnh của sao
+        strength = get_star_strength(sao, chi_position)
+        strength_multiplier = {
+            'miếu': 1.5,
+            'vượng': 1.2,
+            'bình': 1.0,
+            'nhược': 0.7,
+            'hãm': 0.5
+        }.get(strength, 1.0)
+        
+        final_weight = weight * strength_multiplier
+        base_score += final_weight
+        
+        star_details.append({
+            'sao': sao,
+            'weight': weight,
+            'strength': strength,
+            'final_weight': final_weight
+        })
+    
+    # Điều chỉnh combo sao
+    combo_bonus = calculate_combo_bonus(sao_cung.get(cung_name, []))
+    final_score = base_score + combo_bonus
+    
+    # Chuẩn hóa về thang điểm [-3, +3]
+    normalized_score = max(-3, min(3, final_score / 2))
+    
+    return {
+        'cung': cung_name,
+        'base_score': base_score,
+        'combo_bonus': combo_bonus,
+        'final_score': final_score,
+        'normalized_score': round(normalized_score, 1),
+        'star_details': star_details
+    }
+
+
+def calculate_combo_bonus(stars):
+    """Tính điểm thưởng cho combo sao"""
+    combo_bonus = 0
+    
+    # Combo cát tinh
+    if 'Tử Vi' in stars and 'Thiên Phủ' in stars:
+        combo_bonus += 1.5
+    if 'Hóa Lộc' in stars and 'Lộc Tồn' in stars:
+        combo_bonus += 1.0
+    if 'Hóa Quyền' in stars and 'Hóa Khoa' in stars:
+        combo_bonus += 1.0
+    if 'Tả Hữu' in stars and 'Khôi Việt' in stars:
+        combo_bonus += 0.8
+    
+    # Combo sát tinh
+    sat_stars = ['Kình Dương', 'Đà La', 'Hỏa Linh', 'Linh Tinh']
+    sat_count = sum(1 for star in stars if star in sat_stars)
+    if sat_count >= 2:
+        combo_bonus -= 1.0
+    if sat_count >= 3:
+        combo_bonus -= 1.5
+    
+    # Combo Không Kiếp
+    if 'Không Kiếp' in stars:
+        combo_bonus -= 0.8
+    
+    return combo_bonus
+
+
+def calculate_all_cung_scores(sao_cung, menh_cung_chi):
+    """Tính điểm số cho tất cả các cung"""
+    chi_positions = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi']
+    cung_names = ['Mệnh', 'Phụ Mẫu', 'Phúc Đức', 'Điền Trạch', 'Quan Lộc', 'Nô Bộc', 
+                  'Thiên Di', 'Tật Ách', 'Tài Bạch', 'Tử Tức', 'Phu Thê', 'Huynh Đệ']
+    
+    menh_index = chi_positions.index(menh_cung_chi)
+    cung_scores = {}
+    
+    for i, cung_name in enumerate(cung_names):
+        chi_index = (menh_index + i) % 12
+        chi_position = chi_positions[chi_index]
+        cung_scores[cung_name] = calculate_cung_score(sao_cung, cung_name, chi_position)
+    
+    return cung_scores
+
+
+def generate_fortune_analysis(cung_scores, dai_van, tieu_van, current_age):
+    """Tạo phân tích vận mệnh dựa trên điểm số các cung và vận hạn"""
+    
+    # Tìm đại vận hiện tại
+    current_dai_van = None
+    for van in dai_van:
+        if van['start_age'] <= current_age <= van['end_age']:
+            current_dai_van = van
+            break
+    
+    # Tính điểm 4 trụ chính
+    four_pillars = {
+        'cong_viec': cung_scores.get('Quan Lộc', {}).get('normalized_score', 0),
+        'tai_chinh': cung_scores.get('Tài Bạch', {}).get('normalized_score', 0),
+        'tinh_cam': cung_scores.get('Phu Thê', {}).get('normalized_score', 0),
+        'suc_khoe': cung_scores.get('Tật Ách', {}).get('normalized_score', 0)
+    }
+    
+    # Điều chỉnh theo đại vận hiện tại
+    if current_dai_van:
+        current_cung = current_dai_van['cung']
+        if current_cung in cung_scores:
+            dai_van_bonus = cung_scores[current_cung]['normalized_score'] * 0.3
+            if current_cung == 'Quan Lộc':
+                four_pillars['cong_viec'] += dai_van_bonus
+            elif current_cung == 'Tài Bạch':
+                four_pillars['tai_chinh'] += dai_van_bonus
+            elif current_cung == 'Phu Thê':
+                four_pillars['tinh_cam'] += dai_van_bonus
+            elif current_cung == 'Tật Ách':
+                four_pillars['suc_khoe'] += dai_van_bonus
+    
+    # Điều chỉnh theo tiểu vận (lưu niên)
+    if tieu_van and 'tu_hoa' in tieu_van:
+        for hoa_sao, cung in tieu_van['tu_hoa'].items():
+            if cung == 'Quan Lộc':
+                four_pillars['cong_viec'] += 0.5
+            elif cung == 'Tài Bạch':
+                four_pillars['tai_chinh'] += 0.5
+            elif cung == 'Phu Thê':
+                four_pillars['tinh_cam'] += 0.5
+            elif cung == 'Tật Ách':
+                four_pillars['suc_khoe'] += 0.5
+    
+    # Chuẩn hóa điểm số về [-3, +3]
+    for key in four_pillars:
+        four_pillars[key] = max(-3, min(3, four_pillars[key]))
+    
+    return {
+        'four_pillars': four_pillars,
+        'current_dai_van': current_dai_van,
+        'tieu_van': tieu_van,
+        'cung_scores': cung_scores
+    }
+
+
+def generate_guidance_recommendations(fortune_analysis):
+    """Tạo khuyến nghị dựa trên phân tích vận mệnh"""
+    four_pillars = fortune_analysis['four_pillars']
+    current_dai_van = fortune_analysis['current_dai_van']
+    
+    recommendations = []
+    
+    # Khuyến nghị cho từng trụ
+    for pillar, score in four_pillars.items():
+        if pillar == 'cong_viec':
+            if score >= 2:
+                recommendations.append({
+                    'category': 'Công việc',
+                    'score': score,
+                    'level': 'Rất thuận',
+                    'advice': 'Năm nay rất thuận lợi cho sự nghiệp. Nên chủ động tìm kiếm cơ hội thăng tiến, học hỏi kỹ năng mới, hoặc khởi nghiệp.',
+                    'actions': ['Tìm kiếm cơ hội thăng tiến', 'Học kỹ năng quản lý', 'Xây dựng mạng lưới quan hệ']
+                })
+            elif score >= 1:
+                recommendations.append({
+                    'category': 'Công việc',
+                    'score': score,
+                    'level': 'Thuận lợi',
+                    'advice': 'Công việc có xu hướng tích cực. Nên tập trung vào việc hoàn thiện kỹ năng và tìm kiếm cơ hội phát triển.',
+                    'actions': ['Hoàn thiện kỹ năng chuyên môn', 'Tích cực tham gia dự án', 'Xây dựng danh tiếng']
+                })
+            elif score <= -1:
+                recommendations.append({
+                    'category': 'Công việc',
+                    'score': score,
+                    'level': 'Cần cẩn trọng',
+                    'advice': 'Công việc có thể gặp khó khăn. Nên thận trọng trong các quyết định, tránh thay đổi lớn, tập trung vào việc ổn định.',
+                    'actions': ['Thận trọng trong quyết định', 'Tránh thay đổi công việc', 'Tăng cường kỹ năng']
+                })
+            else:
+                recommendations.append({
+                    'category': 'Công việc',
+                    'score': score,
+                    'level': 'Trung tính',
+                    'advice': 'Công việc ở mức ổn định. Nên tập trung vào việc duy trì hiệu suất và tìm kiếm cơ hội cải thiện.',
+                    'actions': ['Duy trì hiệu suất', 'Tìm cơ hội cải thiện', 'Xây dựng mối quan hệ tốt']
+                })
+        
+        elif pillar == 'tai_chinh':
+            if score >= 2:
+                recommendations.append({
+                    'category': 'Tài chính',
+                    'score': score,
+                    'level': 'Rất thuận',
+                    'advice': 'Tài chính rất thuận lợi. Có thể đầu tư, mở rộng kinh doanh hoặc tích lũy tài sản.',
+                    'actions': ['Đầu tư thông minh', 'Tích lũy tài sản', 'Mở rộng nguồn thu nhập']
+                })
+            elif score >= 1:
+                recommendations.append({
+                    'category': 'Tài chính',
+                    'score': score,
+                    'level': 'Thuận lợi',
+                    'advice': 'Tài chính có xu hướng tích cực. Nên tập trung vào việc quản lý chi tiêu và tìm kiếm cơ hội đầu tư.',
+                    'actions': ['Quản lý chi tiêu hiệu quả', 'Tìm cơ hội đầu tư', 'Tăng cường tiết kiệm']
+                })
+            elif score <= -1:
+                recommendations.append({
+                    'category': 'Tài chính',
+                    'score': score,
+                    'level': 'Cần cẩn trọng',
+                    'advice': 'Tài chính cần được quản lý cẩn thận. Tránh đầu tư rủi ro cao, tập trung vào việc tiết kiệm và ổn định.',
+                    'actions': ['Tránh đầu tư rủi ro', 'Tăng cường tiết kiệm', 'Quản lý nợ cẩn thận']
+                })
+            else:
+                recommendations.append({
+                    'category': 'Tài chính',
+                    'score': score,
+                    'level': 'Trung tính',
+                    'advice': 'Tài chính ở mức ổn định. Nên duy trì thói quen tiết kiệm và tìm kiếm cơ hội cải thiện thu nhập.',
+                    'actions': ['Duy trì tiết kiệm', 'Tìm cơ hội tăng thu nhập', 'Quản lý ngân sách']
+                })
+        
+        elif pillar == 'tinh_cam':
+            if score >= 2:
+                recommendations.append({
+                    'category': 'Tình cảm',
+                    'score': score,
+                    'level': 'Rất thuận',
+                    'advice': 'Tình cảm rất thuận lợi. Có thể kết hôn, có con hoặc cải thiện mối quan hệ hiện tại.',
+                    'actions': ['Tăng cường giao tiếp', 'Dành thời gian cho gia đình', 'Xây dựng mối quan hệ bền vững']
+                })
+            elif score >= 1:
+                recommendations.append({
+                    'category': 'Tình cảm',
+                    'score': score,
+                    'level': 'Thuận lợi',
+                    'advice': 'Tình cảm có xu hướng tích cực. Nên tập trung vào việc giao tiếp và xây dựng mối quan hệ.',
+                    'actions': ['Cải thiện giao tiếp', 'Dành thời gian cho người thân', 'Xây dựng sự tin tưởng']
+                })
+            elif score <= -1:
+                recommendations.append({
+                    'category': 'Tình cảm',
+                    'score': score,
+                    'level': 'Cần cẩn trọng',
+                    'advice': 'Tình cảm có thể gặp khó khăn. Nên thận trọng trong các quyết định, tránh xung đột, tập trung vào việc hòa giải.',
+                    'actions': ['Tránh xung đột', 'Tập trung hòa giải', 'Thận trọng trong quyết định']
+                })
+            else:
+                recommendations.append({
+                    'category': 'Tình cảm',
+                    'score': score,
+                    'level': 'Trung tính',
+                    'advice': 'Tình cảm ở mức ổn định. Nên duy trì mối quan hệ hiện tại và tìm kiếm cơ hội cải thiện.',
+                    'actions': ['Duy trì mối quan hệ', 'Tìm cơ hội cải thiện', 'Tăng cường giao tiếp']
+                })
+        
+        elif pillar == 'suc_khoe':
+            if score >= 2:
+                recommendations.append({
+                    'category': 'Sức khỏe',
+                    'score': score,
+                    'level': 'Rất tốt',
+                    'advice': 'Sức khỏe rất tốt. Có thể tham gia các hoạt động thể thao, du lịch hoặc thử thách bản thân.',
+                    'actions': ['Tăng cường thể thao', 'Duy trì chế độ ăn uống', 'Tham gia hoạt động ngoài trời']
+                })
+            elif score >= 1:
+                recommendations.append({
+                    'category': 'Sức khỏe',
+                    'score': score,
+                    'level': 'Tốt',
+                    'advice': 'Sức khỏe ở mức tốt. Nên duy trì thói quen lành mạnh và tìm kiếm cơ hội cải thiện.',
+                    'actions': ['Duy trì thói quen lành mạnh', 'Tăng cường vận động', 'Kiểm tra sức khỏe định kỳ']
+                })
+            elif score <= -1:
+                recommendations.append({
+                    'category': 'Sức khỏe',
+                    'score': score,
+                    'level': 'Cần chú ý',
+                    'advice': 'Sức khỏe cần được chú ý. Nên thận trọng, tránh căng thẳng, tập trung vào việc nghỉ ngơi và phục hồi.',
+                    'actions': ['Tránh căng thẳng', 'Tăng cường nghỉ ngơi', 'Kiểm tra sức khỏe']
+                })
+            else:
+                recommendations.append({
+                    'category': 'Sức khỏe',
+                    'score': score,
+                    'level': 'Ổn định',
+                    'advice': 'Sức khỏe ở mức ổn định. Nên duy trì thói quen lành mạnh và tìm kiếm cơ hội cải thiện.',
+                    'actions': ['Duy trì thói quen lành mạnh', 'Tìm cơ hội cải thiện', 'Kiểm tra sức khỏe định kỳ']
+                })
+    
+    # Tạo kim chỉ nam tổng quát
+    overall_score = sum(four_pillars.values()) / 4
+    if overall_score >= 1.5:
+        kim_chi_nam = "Năm nay là thời điểm rất thuận lợi. Nên chủ động nắm bắt cơ hội, đầu tư vào bản thân và phát triển sự nghiệp."
+    elif overall_score >= 0.5:
+        kim_chi_nam = "Năm nay có xu hướng tích cực. Nên tập trung vào việc cải thiện và phát triển các lĩnh vực quan trọng."
+    elif overall_score <= -0.5:
+        kim_chi_nam = "Năm nay cần thận trọng. Nên tập trung vào việc ổn định, tránh rủi ro và chuẩn bị cho tương lai."
+    else:
+        kim_chi_nam = "Năm nay ở mức ổn định. Nên duy trì hiện trạng và tìm kiếm cơ hội cải thiện từng bước."
+    
+    return {
+        'recommendations': recommendations,
+        'kim_chi_nam': kim_chi_nam,
+        'overall_score': round(overall_score, 1)
+    }
+
 # Dynamic conversation states
 class ConversationState(Enum):
     GREETING = "greeting"
@@ -214,90 +738,138 @@ class ConversationState(Enum):
     RESET = "reset"  # When user wants to start over
 
 # Database session management
-db_session = DBSession()
+def check_database_integrity():
+    """Check database integrity and fix if corrupted"""
+    try:
+        conn = sqlite3.connect('tuvi.db')
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA integrity_check;")
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result[0] != 'ok':
+            print(f"Database integrity check failed: {result[0]}")
+            return False
+        return True
+    except Exception as e:
+        print(f"Error checking database integrity: {e}")
+        return False
+
+def recreate_database():
+    """Recreate database from scratch"""
+    try:
+        from models import Base, engine
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+        print("Database recreated successfully")
+        return True
+    except Exception as e:
+        print(f"Failed to recreate database: {e}")
+        return False
+
+@contextmanager
+def get_db_session():
+    """Context manager for database sessions"""
+    session = DBSession()
+    try:
+        yield session
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Database error: {e}")
+        # Try to recreate database if corrupted
+        if "malformed" in str(e).lower() or "corrupted" in str(e).lower():
+            print("Database appears corrupted, attempting to recreate...")
+            recreate_database()
+        raise e
+    finally:
+        session.close()
 
 def get_or_create_session(user_id="default"):
     """Get or create user session from database"""
-    session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
-    
-    if not session_record:
-        # Create new session
-        session_record = UserSession(
-            session_id=user_id,
-            current_step=ConversationState.GREETING.value,
-            collected_info=json.dumps({}),
-            memory_summary=""
-        )
-        db_session.add(session_record)
-        db_session.commit()
-    
-    return {
-        'state': ConversationState(session_record.current_step),
-        'collected_info': json.loads(session_record.collected_info or '{}'),
-        'memory_summary': session_record.memory_summary or ""
-    }
+    with get_db_session() as db_session:
+        session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
+        
+        if not session_record:
+            # Create new session
+            session_record = UserSession(
+                session_id=user_id,
+                current_step=ConversationState.GREETING.value,
+                collected_info=json.dumps({}),
+                memory_summary=""
+            )
+            db_session.add(session_record)
+            db_session.commit()
+        
+        return {
+            'state': ConversationState(session_record.current_step),
+            'collected_info': json.loads(session_record.collected_info or '{}'),
+            'memory_summary': session_record.memory_summary or ""
+        }
 
 def update_session(user_id="default", state=None, collected_info=None, memory_summary=None):
     """Update user session in database"""
-    session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
-    
-    if session_record:
-        if state:
-            session_record.current_step = state.value if isinstance(state, ConversationState) else state
-        if collected_info is not None:
-            session_record.collected_info = json.dumps(collected_info)
-        if memory_summary is not None:
-            session_record.memory_summary = memory_summary
+    with get_db_session() as db_session:
+        session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
         
-        db_session.commit()
+        if session_record:
+            if state:
+                session_record.current_step = state.value if isinstance(state, ConversationState) else state
+            if collected_info is not None:
+                session_record.collected_info = json.dumps(collected_info)
+            if memory_summary is not None:
+                session_record.memory_summary = memory_summary
+            
+            db_session.commit()
 
 def reset_session(user_id="default"):
     """Reset user session in database"""
-    session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
-    
-    if session_record:
-        session_record.current_step = ConversationState.GREETING.value
-        session_record.collected_info = json.dumps({})
-        session_record.memory_summary = ""
+    with get_db_session() as db_session:
+        session_record = db_session.query(UserSession).filter(UserSession.session_id == user_id).first()
+        
+        if session_record:
+            session_record.current_step = ConversationState.GREETING.value
+            session_record.collected_info = json.dumps({})
+            session_record.memory_summary = ""
+            db_session.commit()
+        
+        # Also clear chat history for this session
+        db_session.query(ChatHistory).filter(ChatHistory.user_id == user_id).delete()
         db_session.commit()
-    
-    # Also clear chat history for this session
-    db_session.query(ChatHistory).filter(ChatHistory.user_id == user_id).delete()
-    db_session.commit()
 
 def save_chat_message(user_id="default", message="", role="user", state=None, extracted_info=None):
     """Save chat message to database"""
-    chat_record = ChatHistory(
-        user_id=user_id,
-        message=message,
-        role=role,
-        step=state.value if isinstance(state, ConversationState) else state,
-        extracted_info=json.dumps(extracted_info) if extracted_info else None
-    )
-    db_session.add(chat_record)
-    db_session.commit()
+    with get_db_session() as db_session:
+        chat_record = ChatHistory(
+            user_id=user_id,
+            message=message,
+            role=role,
+            step=state.value if isinstance(state, ConversationState) else state,
+            extracted_info=json.dumps(extracted_info) if extracted_info else None
+        )
+        db_session.add(chat_record)
+        db_session.commit()
 
 def get_chat_history(user_id="default", limit=50):
     """Get chat history from database"""
-    history = db_session.query(ChatHistory).filter(
-        ChatHistory.user_id == user_id
-    ).order_by(ChatHistory.created_at.desc()).limit(limit).all()
-    
-    return [{
-        'message': h.message,
-        'role': h.role,
-        'step': h.step,
-        'extracted_info': json.loads(h.extracted_info) if h.extracted_info else None,
-        'created_at': h.created_at
-    } for h in reversed(history)]
+    with get_db_session() as db_session:
+        history = db_session.query(ChatHistory).filter(
+            ChatHistory.user_id == user_id
+        ).order_by(ChatHistory.created_at.desc()).limit(limit).all()
+        
+        return [{
+            'message': h.message,
+            'role': h.role,
+            'step': h.step,
+            'extracted_info': json.loads(h.extracted_info) if h.extracted_info else None,
+            'created_at': h.created_at
+        } for h in reversed(history)]
 
 def create_memory_buffer(user_id="default"):
     """Create ChatSummaryMemoryBuffer for user session"""
     # Get chat history from database
     chat_history = get_chat_history(user_id)
-    
-    # Convert to ChatMessage format
-    from llama_index.core.llms import ChatMessage, MessageRole
+
     messages = []
     for chat in chat_history:
         role = MessageRole.USER if chat['role'] == 'user' else MessageRole.ASSISTANT
@@ -895,6 +1467,7 @@ def perform_tuvi_analysis(user_id: str = "default") -> str:
 - 🐉 Địa Chi: {chart_data['basic_info']['dia_chi']}
 - ⭐ Cục: {chart_data['basic_info']['cuc']}
 - 🏠 Cung Mệnh: {chart_data['basic_info']['menh_cung']}
+- 🎂 Tuổi hiện tại: {chart_data['basic_info']['current_age']}
 
 🌌 **Các sao trong 12 cung:**
 """
@@ -902,9 +1475,24 @@ def perform_tuvi_analysis(user_id: str = "default") -> str:
             sao_str = ', '.join(sao_list) if sao_list else 'Trống'
             analysis += f"• **{cung}**: {sao_str}\n"
         
+        # Thêm thông tin vận hạn
         analysis += f"""
 
-💫 **Phân tích hoàn tất!** Lá số của {collected_info['name']} đã được tính toán theo phương pháp tử vi truyền thống.
+📊 **Điểm 4 trụ chính:**
+- 💼 **Công việc**: {chart_data['analysis']['four_pillars']['cong_viec']}/3
+- 💰 **Tài chính**: {chart_data['analysis']['four_pillars']['tai_chinh']}/3  
+- ❤️ **Tình cảm**: {chart_data['analysis']['four_pillars']['tinh_cam']}/3
+- 🏥 **Sức khỏe**: {chart_data['analysis']['four_pillars']['suc_khoe']}/3
+
+🌟 **Vận hạn hiện tại:**
+- 🎯 **Đại vận**: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- 📅 **Tiểu vận**: {chart_data['analysis']['tieu_van']['description']}
+- 📈 **Lưu tháng**: {chart_data['fortune']['luu_thang']['description']}
+- 📆 **Lưu ngày**: {chart_data['fortune']['luu_ngay']['description']}
+
+🎯 **Kim chỉ nam**: {chart_data['guidance']['kim_chi_nam']}
+
+💫 **Phân tích hoàn tất!** Lá số của {collected_info['name']} đã được tính toán theo phương pháp tử vi truyền thống với các tính toán vận mệnh nâng cao.
 
 ✨ **Bạn có thể hỏi tôi về:**
 - Vận mệnh và tính cách tổng quan
@@ -913,6 +1501,7 @@ def perform_tuvi_analysis(user_id: str = "default") -> str:
 - Tài lộc và đầu tư
 - Sức khỏe và tuổi thọ
 - Mối quan hệ gia đình
+- Vận hạn chi tiết theo năm/tháng
 
 💬 *Để bắt đầu phiên tư vấn mới, bạn có thể nói 'Xin chào' hoặc 'Tôi muốn xem tử vi'*"""
         
@@ -933,10 +1522,64 @@ def handle_consulting_question(message: str, user_id: str = "default") -> str:
     # Save user question
     save_chat_message(user_id, message, "user", ConversationState.CONSULTING)
     
+    # Get user session and collected info for context
+    session = get_or_create_session(user_id)
+    collected_info = session['collected_info']
+    
     # Generate context-aware response using the tuvi query engine
     try:
-        # Use the existing query engine for detailed questions
-        response = query_engine.query(message)
+        # First, get the comprehensive tuvi analysis for this user
+        chart_data = fn_an_sao_comprehensive(
+            collected_info['birthday'], 
+            collected_info['birth_time'], 
+            collected_info['gender']
+        )
+        
+        # Check if it's a specific question about health, career, etc.
+        message_lower = message.lower()
+        if any(keyword in message_lower for keyword in ['sức khỏe', 'sức khoẻ', 'bệnh', 'ốm', 'khỏe']):
+            return generate_health_advice(chart_data, collected_info, user_id)
+        elif any(keyword in message_lower for keyword in ['công việc', 'sự nghiệp', 'nghề', 'làm việc']):
+            return generate_career_advice(chart_data, collected_info, user_id)
+        elif any(keyword in message_lower for keyword in ['tài chính', 'tiền', 'tài lộc', 'đầu tư']):
+            return generate_finance_advice(chart_data, collected_info, user_id)
+        elif any(keyword in message_lower for keyword in ['tình cảm', 'tình yêu', 'hôn nhân', 'gia đình']):
+            return generate_relationship_advice(chart_data, collected_info, user_id)
+        
+        # Create context-rich query with user information and chart data
+        context_query = f"""
+        Dựa trên thông tin người dùng:
+        - Tên: {collected_info.get('name', 'Người dùng')}
+        - Ngày sinh: {collected_info.get('birthday', '')}
+        - Giờ sinh: {collected_info.get('birth_time', '')}
+        - Giới tính: {collected_info.get('gender', '')}
+        
+        Lá số tử vi đã được tính toán:
+        - Thiên Can: {chart_data['basic_info']['thien_can']}
+        - Địa Chi: {chart_data['basic_info']['dia_chi']}
+        - Cục: {chart_data['basic_info']['cuc']}
+        - Cung Mệnh: {chart_data['basic_info']['menh_cung']}
+        - Tuổi hiện tại: {chart_data['basic_info']['current_age']}
+        
+        Điểm 4 trụ chính:
+        - Công việc: {chart_data['analysis']['four_pillars']['cong_viec']}
+        - Tài chính: {chart_data['analysis']['four_pillars']['tai_chinh']}
+        - Tình cảm: {chart_data['analysis']['four_pillars']['tinh_cam']}
+        - Sức khỏe: {chart_data['analysis']['four_pillars']['suc_khoe']}
+        
+        Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+        Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+        
+        Kim chỉ nam: {chart_data['guidance']['kim_chi_nam']}
+        
+        Câu hỏi của người dùng: {message}
+        
+        Hãy trả lời câu hỏi dựa trên lá số tử vi đã được phân tích chi tiết cho người dùng này. 
+        Sử dụng thông tin về điểm số các trụ, vận hạn, và khuyến nghị để đưa ra lời tư vấn cụ thể và chính xác.
+        """
+        
+        # Use the existing query engine for detailed questions with context
+        response = query_engine.query(context_query)
         
         # Save assistant response
         save_chat_message(user_id, str(response), "assistant", ConversationState.CONSULTING)
@@ -946,6 +1589,178 @@ def handle_consulting_question(message: str, user_id: str = "default") -> str:
         error_response = f"❌ Có lỗi xảy ra khi xử lý câu hỏi: {str(e)}"
         save_chat_message(user_id, error_response, "assistant", ConversationState.CONSULTING)
         return error_response
+
+
+def generate_health_advice(chart_data, collected_info, user_id):
+    """Generate specific health advice based on chart analysis"""
+    health_score = chart_data['analysis']['four_pillars']['suc_khoe']
+    health_rec = None
+    
+    # Find health recommendation
+    for rec in chart_data['guidance']['recommendations']:
+        if rec['category'] == 'Sức khỏe':
+            health_rec = rec
+            break
+    
+    if health_rec:
+        response = f"""🏥 **Tư vấn sức khỏe cho {collected_info['name']}**
+
+📊 **Điểm sức khỏe**: {health_score}/3 ({health_rec['level']})
+
+💡 **Phân tích**: {health_rec['advice']}
+
+🎯 **Hành động cụ thể**:
+{chr(10).join([f"• {action}" for action in health_rec['actions']])}
+
+🌟 **Vận hạn sức khỏe**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Lưu ý đặc biệt**: Dựa trên lá số tử vi, bạn nên chú ý đến cung Tật Ách và các sao liên quan đến sức khỏe trong lá số của mình."""
+    else:
+        response = f"""🏥 **Tư vấn sức khỏe cho {collected_info['name']}**
+
+📊 **Điểm sức khỏe**: {health_score}/3
+
+💡 **Phân tích tổng quan**: Dựa trên lá số tử vi, sức khỏe của bạn có điểm số {health_score}/3. 
+
+🌟 **Vận hạn sức khỏe**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Khuyến nghị chung**: Hãy duy trì lối sống lành mạnh và kiểm tra sức khỏe định kỳ."""
+    
+    save_chat_message(user_id, response, "assistant", ConversationState.CONSULTING)
+    return response
+
+
+def generate_career_advice(chart_data, collected_info, user_id):
+    """Generate specific career advice based on chart analysis"""
+    career_score = chart_data['analysis']['four_pillars']['cong_viec']
+    career_rec = None
+    
+    # Find career recommendation
+    for rec in chart_data['guidance']['recommendations']:
+        if rec['category'] == 'Công việc':
+            career_rec = rec
+            break
+    
+    if career_rec:
+        response = f"""💼 **Tư vấn sự nghiệp cho {collected_info['name']}**
+
+📊 **Điểm công việc**: {career_score}/3 ({career_rec['level']})
+
+💡 **Phân tích**: {career_rec['advice']}
+
+🎯 **Hành động cụ thể**:
+{chr(10).join([f"• {action}" for action in career_rec['actions']])}
+
+🌟 **Vận hạn sự nghiệp**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Lưu ý đặc biệt**: Dựa trên lá số tử vi, bạn nên chú ý đến cung Quan Lộc và các sao liên quan đến sự nghiệp trong lá số của mình."""
+    else:
+        response = f"""💼 **Tư vấn sự nghiệp cho {collected_info['name']}**
+
+📊 **Điểm công việc**: {career_score}/3
+
+💡 **Phân tích tổng quan**: Dựa trên lá số tử vi, sự nghiệp của bạn có điểm số {career_score}/3.
+
+🌟 **Vận hạn sự nghiệp**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Khuyến nghị chung**: Hãy tập trung vào việc phát triển kỹ năng và xây dựng mối quan hệ trong công việc."""
+    
+    save_chat_message(user_id, response, "assistant", ConversationState.CONSULTING)
+    return response
+
+
+def generate_finance_advice(chart_data, collected_info, user_id):
+    """Generate specific finance advice based on chart analysis"""
+    finance_score = chart_data['analysis']['four_pillars']['tai_chinh']
+    finance_rec = None
+    
+    # Find finance recommendation
+    for rec in chart_data['guidance']['recommendations']:
+        if rec['category'] == 'Tài chính':
+            finance_rec = rec
+            break
+    
+    if finance_rec:
+        response = f"""💰 **Tư vấn tài chính cho {collected_info['name']}**
+
+📊 **Điểm tài chính**: {finance_score}/3 ({finance_rec['level']})
+
+💡 **Phân tích**: {finance_rec['advice']}
+
+🎯 **Hành động cụ thể**:
+{chr(10).join([f"• {action}" for action in finance_rec['actions']])}
+
+🌟 **Vận hạn tài chính**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Lưu ý đặc biệt**: Dựa trên lá số tử vi, bạn nên chú ý đến cung Tài Bạch và các sao liên quan đến tài lộc trong lá số của mình."""
+    else:
+        response = f"""💰 **Tư vấn tài chính cho {collected_info['name']}**
+
+📊 **Điểm tài chính**: {finance_score}/3
+
+💡 **Phân tích tổng quan**: Dựa trên lá số tử vi, tài chính của bạn có điểm số {finance_score}/3.
+
+🌟 **Vận hạn tài chính**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Khuyến nghị chung**: Hãy quản lý chi tiêu cẩn thận và tìm kiếm cơ hội đầu tư phù hợp."""
+    
+    save_chat_message(user_id, response, "assistant", ConversationState.CONSULTING)
+    return response
+
+
+def generate_relationship_advice(chart_data, collected_info, user_id):
+    """Generate specific relationship advice based on chart analysis"""
+    relationship_score = chart_data['analysis']['four_pillars']['tinh_cam']
+    relationship_rec = None
+    
+    # Find relationship recommendation
+    for rec in chart_data['guidance']['recommendations']:
+        if rec['category'] == 'Tình cảm':
+            relationship_rec = rec
+            break
+    
+    if relationship_rec:
+        response = f"""❤️ **Tư vấn tình cảm cho {collected_info['name']}**
+
+📊 **Điểm tình cảm**: {relationship_score}/3 ({relationship_rec['level']})
+
+💡 **Phân tích**: {relationship_rec['advice']}
+
+🎯 **Hành động cụ thể**:
+{chr(10).join([f"• {action}" for action in relationship_rec['actions']])}
+
+🌟 **Vận hạn tình cảm**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Lưu ý đặc biệt**: Dựa trên lá số tử vi, bạn nên chú ý đến cung Phu Thê và các sao liên quan đến tình cảm trong lá số của mình."""
+    else:
+        response = f"""❤️ **Tư vấn tình cảm cho {collected_info['name']}**
+
+📊 **Điểm tình cảm**: {relationship_score}/3
+
+💡 **Phân tích tổng quan**: Dựa trên lá số tử vi, tình cảm của bạn có điểm số {relationship_score}/3.
+
+🌟 **Vận hạn tình cảm**:
+- Đại vận hiện tại: {chart_data['analysis']['current_dai_van']['cung']} ({chart_data['analysis']['current_dai_van']['age_range']})
+- Tiểu vận: {chart_data['analysis']['tieu_van']['description']}
+
+💫 **Khuyến nghị chung**: Hãy tăng cường giao tiếp và xây dựng mối quan hệ bền vững."""
+    
+    save_chat_message(user_id, response, "assistant", ConversationState.CONSULTING)
+    return response
 
 def prompt_to_predict(questionMessage='', user_id='default'):
     """Entry point for intelligent conversation flow"""
